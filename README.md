@@ -1,7 +1,7 @@
 # 🤖 Hooyar (هویار) - AI Coding Agent
 
 <div align="center">
-  <img src="assets/icon.png" width="128" height="128" alt="Hooyar Logo">
+  <img src="assets/hooyar.png" width="128" height="128" alt="Hooyar Logo">
   <h3>Elite Autonomous AI Coding Agent for Windows</h3>
   <p>ایجنت هوشمند و خودمختار برنامه‌نویسی برای ویندوز</p>
 
