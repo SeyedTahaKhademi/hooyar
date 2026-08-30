@@ -1,6 +1,6 @@
 {
   "name": "hooyar",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "هویار - ایجنت هوشمند برنامه‌نویسی برای ویندوز",
   "main": "electron/main.js",
   "author": "Hooyar Team",
@@ -13,6 +13,26 @@
     "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "dist": "npm run build && electron-builder --win",
     "dist:portable": "npm run build && electron-builder --win portable"
+  },
+  "build": {
+    "appId": "com.hooyar.ai.agent",
+    "productName": "Hooyar",
+    "directories": {
+      "buildResources": "assets"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "assets/hooyar.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "assets/hooyar.ico",
+      "uninstallerIcon": "assets/hooyar.ico"
+    }
   },
   "dependencies": {
     "@fontsource/vazirmatn": "^5.1.0",
