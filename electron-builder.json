@@ -14,7 +14,7 @@
   "win": {
     "sign": null,
     "signingHashAlgorithms": null,
-    "icon": "assets/hooyar.png",
+    "icon": "assets/hooyar.ico",
     "target": [
       {
         "target": "nsis",
@@ -36,9 +36,9 @@
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
     "shortcutName": "Hooyar",
-    "installerIcon": "assets/hooyar.png",
-    "uninstallerIcon": "assets/hooyar.png",
-    "installerHeaderIcon": "assets/hooyar.png"
+    "installerIcon": "assets/hooyar.ico",
+    "uninstallerIcon": "assets/hooyar.ico",
+    "installerHeaderIcon": "assets/hooyar.ico"
   },
   "publish": {
     "provider": "github",

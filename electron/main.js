@@ -34,7 +34,7 @@ function createWindow() {
     minWidth: 1000,
     minHeight: 650,
     title: 'هویار | Hooyar AI Coding Agent',
-    icon: path.join(__dirname, '../assets/hooyar.png'),
+    icon: path.join(__dirname, '../assets/hooyar.ico'),
     frame: true,
     titleBarStyle: 'default',
     webPreferences: {
