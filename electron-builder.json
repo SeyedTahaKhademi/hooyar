@@ -1,0 +1,48 @@
+{
+  "appId": "com.hooyar.ai.agent",
+  "productName": "Hooyar",
+  "copyright": "Copyright © 2026 Hooyar AI",
+  "asar": false,
+  "directories": {
+    "output": "release"
+  },
+  "files": [
+    "dist/**/*",
+    "electron/**/*",
+    "assets/**/*"
+  ],
+  "win": {
+    "sign": null,
+    "signingHashAlgorithms": null,
+    "icon": "assets/icon.ico",
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      },
+      {
+        "target": "zip",
+        "arch": [
+          "x64"
+        ]
+      }
+    ]
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "Hooyar",
+    "installerIcon": "assets/icon.ico",
+    "uninstallerIcon": "assets/icon.ico",
+    "installerHeaderIcon": "assets/icon.ico"
+  },
+  "publish": {
+    "provider": "github",
+    "owner": "seyedtahakhademi",
+    "repo": "hooyar"
+  }
+}
