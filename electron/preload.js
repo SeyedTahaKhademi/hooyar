@@ -2,11 +2,14 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('hooyarNative', {
   selectFolder: () => ipcRenderer.invoke('dialog:selectFolder'),
+  setWorkspace: (workspacePath) => ipcRenderer.invoke('workspace:set', workspacePath),
   readDir: (dirPath) => ipcRenderer.invoke('fs:readDir', dirPath),
   readFile: (filePath) => ipcRenderer.invoke('fs:readFile', filePath),
   writeFile: (filePath, content) => ipcRenderer.invoke('fs:writeFile', { filePath, content }),
   deleteFile: (filePath) => ipcRenderer.invoke('fs:deleteFile', filePath),
   executeTerminal: (command, cwd) => ipcRenderer.invoke('terminal:execute', { command, cwd }),
+  aiRequest: (payload) => ipcRenderer.invoke('ai:request', payload),
+  saveTextFile: (defaultName, content) => ipcRenderer.invoke('dialog:saveTextFile', { defaultName, content }),
   loadConfig: () => ipcRenderer.invoke('config:load'),
   saveConfig: (data) => ipcRenderer.invoke('config:save', data)
 });

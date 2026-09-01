@@ -1,4 +1,5 @@
 import { ProviderConfig, ProviderId } from '../types';
+import { apiFetch } from './apiClient';
 
 export const DEFAULT_PROVIDERS: Record<ProviderId, ProviderConfig> = {
   gemini: {
@@ -353,32 +354,33 @@ export async function verifyApiKey(config: ProviderConfig): Promise<ApiVerificat
       headers['Authorization'] = `Bearer ${config.apiKey}`;
     }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    // First try the model-list endpoint. If the network itself fails
+    // (status 0), fall back to a minimal chat request — some compatible
+    // providers do not expose /models but still serve completions.
+    let result = await apiFetch(testUrl, { method: 'GET', headers }, 8000);
 
-    const response = await fetch(testUrl, {
-      method: 'GET',
-      headers,
-      signal: controller.signal
-    }).catch(async () => {
+    if (result.status === 0) {
       const compUrl = baseUrl.endsWith('/') ? `${baseUrl}chat/completions` : `${baseUrl}/chat/completions`;
-      return await fetch(compUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          model: config.selectedModel,
-          messages: [{ role: 'user', content: 'hi' }],
-          max_tokens: 1
-        })
-      });
-    });
+      result = await apiFetch(
+        compUrl,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            model: config.selectedModel,
+            messages: [{ role: 'user', content: 'hi' }],
+            max_tokens: 1
+          })
+        },
+        8000
+      );
+    }
 
-    clearTimeout(timeoutId);
-
-    if (response?.ok) {
+    if (result.ok) {
       let models: ProviderConfig['models'] | undefined;
       try {
-        models = extractModels(await response.clone().json());
+        const parsed = JSON.parse(result.bodyText);
+        models = extractModels(parsed);
       } catch {
         // Some compatible providers return no model list. The connection is still valid.
       }
@@ -392,12 +394,14 @@ export async function verifyApiKey(config: ProviderConfig): Promise<ApiVerificat
       };
     }
 
-    if (response) {
-      const text = await response.text();
-      return { success: false, message: `خطا در پاسخ سرویس (${response.status}): ${text.substring(0, 100)}` };
-    }
-
-    return { success: false, message: 'پاسخی از سرور دریافت نشد.' };
+    const text = result.bodyText;
+    return {
+      success: false,
+      message:
+        result.status === 0
+          ? `خطای ارتباطی: ${text}`
+          : `خطا در پاسخ سرویس (${result.status}): ${text.substring(0, 100)}`
+    };
   } catch (error: any) {
     if (error.name === 'AbortError') {
       return { success: false, message: 'زمان پاسخ‌دهی سرور به پایان رسید (Timeout).' };

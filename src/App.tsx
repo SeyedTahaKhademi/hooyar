@@ -61,6 +61,11 @@ function App() {
             chats: Array.isArray(saved.chats) && saved.chats.length ? saved.chats : prev.chats,
             activeChatId: saved.activeChatId || prev.activeChatId
           }));
+          // Re-register the restored workspace in the main process so the
+          // file-system sandbox knows the allowed root from startup.
+          if (native?.setWorkspace && saved.workspacePath) {
+            native.setWorkspace(saved.workspacePath);
+          }
         }
       }
     };
@@ -89,6 +94,10 @@ function App() {
     const selected = await native.selectFolder();
     if (selected) {
       setConfig((prev) => ({ ...prev, workspacePath: selected }));
+      // Keep the main-process sandbox in sync with the renderer state.
+      if (native?.setWorkspace) {
+        await native.setWorkspace(selected);
+      }
       await refreshFileTree(selected);
       addTerminalLine('info', `پوشه کاری پروژه: ${selected}`);
     }

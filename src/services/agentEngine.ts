@@ -1,19 +1,5 @@
 import { Message, ProviderConfig, ToolCall } from '../types';
-
-declare global {
-  interface Window {
-    hooyarNative?: {
-      selectFolder: () => Promise<string | null>;
-      readDir: (dirPath: string) => Promise<{ success: boolean; tree?: any[]; error?: string }>;
-      readFile: (filePath: string) => Promise<{ success: boolean; content?: string; error?: string }>;
-      writeFile: (filePath: string, content: string) => Promise<{ success: boolean; error?: string }>;
-      deleteFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
-      executeTerminal: (command: string, cwd?: string) => Promise<{ success: boolean; stdout: string; stderr: string; error?: string }>;
-      loadConfig: () => Promise<any>;
-      saveConfig: (data: any) => Promise<boolean>;
-    };
-  }
-}
+import { apiFetch } from './apiClient';
 
 export const SYSTEM_PROMPT_DEFAULT = `You are Hooyar (هویار), an elite autonomous AI Coding Agent running directly on the user's desktop computer.
 You assist developers in writing code, creating projects, debugging errors, managing workspace files, and executing terminal commands.
@@ -104,22 +90,31 @@ export async function runAgentStep(
   ];
 
   try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: provider.selectedModel,
-        messages: apiMessages,
-        temperature: 0.2
-      })
-    });
+    const response = await apiFetch(
+      url,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model: provider.selectedModel,
+          messages: apiMessages,
+          temperature: 0.2
+        })
+      },
+      300000
+    );
 
     if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(formatProviderError(provider, response.status, errText));
+      throw new Error(formatProviderError(provider, response.status, response.bodyText));
     }
 
-    const data = await response.json();
+    let data: any;
+    try {
+      data = JSON.parse(response.bodyText);
+    } catch {
+      throw new Error(`پاسخ نامعتبر (غیر JSON) از ${provider.name} دریافت شد.`);
+    }
+
     const rawContent = data.choices?.[0]?.message?.content || 'پاسخی از مدل دریافت نشد.';
 
     // Extract tool calls if JSON tool blocks are present
