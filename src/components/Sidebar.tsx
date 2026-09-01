@@ -8,7 +8,6 @@ import {
   ChevronRight,
   ChevronDown,
   RefreshCw,
-  Terminal,
   FolderPlus,
   Bug,
   ShieldCheck,
@@ -19,7 +18,14 @@ import {
   Trash2,
   Edit2,
   Check,
-  X as CloseIcon
+  X as CloseIcon,
+  ArrowUp,
+  ArrowDown,
+  Settings,
+  ChevronUp,
+  Zap,
+  GripVertical,
+  Key
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -36,6 +42,13 @@ interface SidebarProps {
   onSelectChat: (chatId: string) => void;
   onDeleteChat: (chatId: string) => void;
   onEditChatTitle: (chatId: string, newTitle: string) => void;
+  onChangeProvider: (id: ProviderId) => void;
+  onChangeModel: (providerId: ProviderId, modelId: string) => void;
+  onReorderProviders: (fromIdx: number, toIdx: number) => void;
+  onReorderModels: (providerId: ProviderId, fromIdx: number, toIdx: number) => void;
+  providerOrder: ProviderId[];
+  modelOrder: Record<ProviderId, string[]>;
+  onOpenSettings: () => void;
 }
 
 const FileItem: React.FC<{ node: FileNode; onSelectFile: (path: string) => void }> = ({ node, onSelectFile }) => {
@@ -104,11 +117,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onNewChat,
   onSelectChat,
   onDeleteChat,
-  onEditChatTitle
+  onEditChatTitle,
+  onChangeProvider,
+  onChangeModel,
+  onReorderProviders,
+  onReorderModels,
+  providerOrder,
+  modelOrder,
+  onOpenSettings
 }) => {
-  const [activeTab, setActiveTab] = useState<'files' | 'prompts' | 'chats'>('files');
+  const [activeTab, setActiveTab] = useState<'files' | 'prompts' | 'chats' | 'providers'>('files');
   const [editingChatId, setEditingChatId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
+  const [expandedProvider, setExpandedProvider] = useState<ProviderId | null>(null);
 
   const startEditing = (chat: ChatSession) => {
     setEditingChatId(chat.id);
@@ -120,6 +141,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
       onEditChatTitle(chatId, editTitle.trim());
     }
     setEditingChatId(null);
+  };
+
+  const moveProvider = (idx: number, direction: -1 | 1) => {
+    const newIdx = idx + direction;
+    if (newIdx < 0 || newIdx >= providerOrder.length) return;
+    onReorderProviders(idx, newIdx);
+  };
+
+  const moveModel = (providerId: ProviderId, idx: number, direction: -1 | 1) => {
+    const ordered = modelOrder[providerId] || providers[providerId]?.models.map((m) => m.id) || [];
+    const newIdx = idx + direction;
+    if (newIdx < 0 || newIdx >= ordered.length) return;
+    onReorderModels(providerId, idx, newIdx);
+  };
+
+  const getOrderedModels = (providerId: ProviderId) => {
+    const p = providers[providerId];
+    if (!p) return [];
+    const order = modelOrder[providerId];
+    if (!order || order.length === 0) return p.models;
+    const ordered: typeof p.models = [];
+    for (const id of order) {
+      const m = p.models.find((x) => x.id === id);
+      if (m) ordered.push(m);
+    }
+    for (const m of p.models) {
+      if (!ordered.some((x) => x.id === m.id)) ordered.push(m);
+    }
+    return ordered;
   };
 
   const quickPrompts = [
@@ -146,41 +196,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   return (
-    <aside className="w-60 border-l border-slate-800/90 glass-panel flex flex-col h-[calc(100vh-3.5rem)] select-none">
+    <aside className="w-60 border-l border-slate-800/90 glass-panel flex flex-col h-[calc(100vh-2.5rem)] select-none">
       {/* Sidebar Header Tabs */}
-      <div className="flex border-b border-slate-800 p-1.5 gap-1 bg-slate-950">
-        <button
-          onClick={() => setActiveTab('files')}
-          className={`flex-1 py-1 rounded text-xs font-semibold transition-all ${activeTab === 'files'
-            ? 'bg-slate-850 text-sky-400 border border-slate-700/60'
-            : 'text-slate-400 hover:text-slate-200'
+      <div className="flex border-b border-slate-800 p-1 gap-0.5 bg-slate-950 flex-wrap">
+        {([
+          { id: 'files', label: 'فایل‌ها' },
+          { id: 'prompts', label: 'دستورات' },
+          { id: 'chats', label: 'گفتگوها' },
+          { id: 'providers', label: 'ارائه‌دهنده‌ها' }
+        ] as const).map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setActiveTab(t.id)}
+            className={`flex-1 min-w-[4.5rem] py-1 rounded text-[10.5px] font-semibold transition-all ${
+              activeTab === t.id
+                ? 'bg-slate-850 text-sky-400 border border-slate-700/60'
+                : 'text-slate-400 hover:text-slate-200'
             }`}
-        >
-          فایل‌های پروژه
-        </button>
-        <button
-          onClick={() => setActiveTab('prompts')}
-          className={`flex-1 py-1 rounded text-xs font-semibold transition-all ${activeTab === 'prompts'
-            ? 'bg-slate-850 text-sky-400 border border-slate-700/60'
-            : 'text-slate-400 hover:text-slate-200'
-            }`}
-        >
-          دستورات آماده
-        </button>
-        <button
-          onClick={() => setActiveTab('chats')}
-          className={`flex-1 py-1 rounded text-xs font-semibold transition-all ${activeTab === 'chats'
-            ? 'bg-slate-850 text-sky-400 border border-slate-700/60'
-            : 'text-slate-400 hover:text-slate-200'
-            }`}
-        >
-          گفتگوها
-        </button>
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
       {/* Tab Content */}
       {activeTab === 'files' ? (
-        <div className="flex-1 overflow-y-auto p-2.5 flex flex-col">
+        <div className="flex-1 overflow-y-auto p-2 flex flex-col">
           <div className="flex items-center justify-between mb-2 px-1">
             <span className="text-[11px] font-semibold text-slate-400">ساختار پروژه</span>
             <button
@@ -212,27 +253,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
       ) : activeTab === 'prompts' ? (
-        <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
-          <span className="text-[11px] font-semibold text-slate-400 block mb-1.5 px-1">دستورات ایجنت</span>
+        <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+          <span className="text-[11px] font-semibold text-slate-400 block mb-1 px-1">دستورات ایجنت</span>
           {quickPrompts.map((item, idx) => {
             const Icon = item.icon;
             return (
               <button
                 key={idx}
                 onClick={() => onQuickPrompt(item.prompt)}
-                className="w-full text-right p-2.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-slate-800 transition-all group"
+                className="w-full text-right p-2 rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-slate-800 transition-all group"
               >
                 <div className="flex items-center gap-2 mb-1">
                   <Icon className="w-4 h-4 text-sky-400" />
                   <span className="text-xs font-semibold text-slate-200 group-hover:text-sky-300">{item.title}</span>
                 </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed">{item.prompt}</p>
+                <p className="text-[10.5px] text-slate-400 leading-relaxed">{item.prompt}</p>
               </button>
             );
           })}
         </div>
-      ) : (
-        <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
+      ) : activeTab === 'chats' ? (
+        <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
           <button
             onClick={onNewChat}
             className="w-full flex items-center justify-center gap-1.5 p-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold transition-all"
@@ -244,10 +285,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div
                 key={chat.id}
                 onClick={() => onSelectChat(chat.id)}
-                className={`group w-full text-right p-2 rounded-lg border transition-all cursor-pointer relative ${activeChatId === chat.id
+                className={`group w-full text-right p-2 rounded-lg border transition-all cursor-pointer relative ${
+                  activeChatId === chat.id
                     ? 'bg-sky-950/50 border-sky-500/40 text-sky-200'
                     : 'bg-slate-900/70 border-slate-800 text-slate-400 hover:bg-slate-800'
-                  }`}
+                }`}
               >
                 {editingChatId === chat.id ? (
                   <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
@@ -295,15 +337,216 @@ export const Sidebar: React.FC<SidebarProps> = ({
             ))}
           </div>
         </div>
+      ) : (
+        /* Providers Tab — Reorderable + Model selection */
+        <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+          <div className="flex items-center justify-between px-1 mb-1">
+            <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1">
+              <Cpu className="w-3.5 h-3.5 text-sky-400" />
+              مدیریت ارائه‌دهنده‌ها
+            </span>
+            <button
+              onClick={onOpenSettings}
+              className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-sky-400 transition-colors"
+              title="تنظیمات کلید API"
+            >
+              <Settings className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div className="text-[10px] text-slate-500 px-1 mb-2 leading-relaxed">
+            برای جابه‌جایی از فلش‌ها استفاده کنید. روی نام ارائه‌دهنده کلیک تا لیست مدل‌هایش باز شود.
+          </div>
+
+          <div className="space-y-1">
+            {providerOrder.map((pid, idx) => {
+              const provider = providers[pid];
+              if (!provider) return null;
+              const isActive = activeProviderId === pid;
+              const isExpanded = expandedProvider === pid;
+              const orderedModels = getOrderedModels(pid);
+
+              return (
+                <div
+                  key={pid}
+                  className={`rounded-lg border transition-all ${
+                    isActive
+                      ? 'bg-sky-950/40 border-sky-600/40'
+                      : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  {/* Provider Row */}
+                  <div className="flex items-center gap-1 p-1.5">
+                    {/* Reorder Buttons */}
+                    <div className="flex flex-col gap-0.5 shrink-0">
+                      <button
+                        onClick={() => moveProvider(idx, -1)}
+                        disabled={idx === 0}
+                        className="p-0.5 rounded text-slate-500 hover:text-sky-400 hover:bg-slate-800 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                        title="انتقال به بالا"
+                      >
+                        <ArrowUp className="w-2.5 h-2.5" />
+                      </button>
+                      <button
+                        onClick={() => moveProvider(idx, 1)}
+                        disabled={idx === providerOrder.length - 1}
+                        className="p-0.5 rounded text-slate-500 hover:text-sky-400 hover:bg-slate-800 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                        title="انتقال به پایین"
+                      >
+                        <ArrowDown className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+
+                    <GripVertical className="w-3 h-3 text-slate-600 shrink-0" />
+
+                    {/* Status Dot */}
+                    <button
+                      onClick={() => onChangeProvider(pid)}
+                      className="w-2 h-2 rounded-full shrink-0 transition-all hover:scale-125"
+                      title="انتخاب به عنوان ارائه‌دهنده فعال"
+                      style={{
+                        background: isActive
+                          ? '#10b981'
+                          : provider.isVerified
+                          ? '#38bdf8'
+                          : provider.apiKey
+                          ? '#f59e0b'
+                          : '#475569'
+                      }}
+                    />
+
+                    {/* Provider Name + Expand */}
+                    <button
+                      onClick={() => setExpandedProvider(isExpanded ? null : pid)}
+                      className="flex-1 text-right min-w-0 flex items-center justify-between gap-1 px-1 py-0.5 rounded hover:bg-slate-800/60 transition-colors"
+                    >
+                      <div className="text-right min-w-0">
+                        <div className={`text-[11px] font-semibold truncate ${
+                          isActive ? 'text-sky-200' : 'text-slate-200'
+                        }`}>
+                          {provider.nameFa}
+                        </div>
+                        <div className="text-[9.5px] text-slate-500 truncate dir-ltr">
+                          {provider.models[0]?.name || provider.name}
+                        </div>
+                      </div>
+                      {isExpanded ? (
+                        <ChevronUp className="w-3 h-3 text-slate-400 shrink-0" />
+                      ) : (
+                        <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
+                      )}
+                    </button>
+
+                    {/* Key Status Badge */}
+                    {provider.requiresKey && !provider.apiKey && (
+                      <span className="shrink-0" title="کلید API تنظیم نشده">
+                        <Key className="w-3 h-3 text-amber-500/70" />
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Expanded — Model List with Reorder */}
+                  {isExpanded && (
+                    <div className="px-1 pb-1.5 border-t border-slate-800/70 pt-1.5 mt-1 space-y-0.5">
+                      <div className="text-[10px] text-slate-400 px-1 mb-1 flex items-center gap-1">
+                        <Zap className="w-3 h-3 text-sky-400 shrink-0" />
+                        مدل‌های موجود
+                      </div>
+
+                      {orderedModels.map((model, mIdx) => {
+                        const isSelectedModel = provider.selectedModel === model.id;
+                        return (
+                          <div
+                            key={model.id}
+                            className={`flex items-center gap-1 px-1 py-1 rounded transition-colors group ${
+                              isSelectedModel && isActive
+                                ? 'bg-sky-900/40'
+                                : 'hover:bg-slate-800/60'
+                            }`}
+                          >
+                            {/* Model Reorder */}
+                            <div className="flex flex-col gap-0.5 shrink-0 opacity-60 group-hover:opacity-100">
+                              <button
+                                onClick={() => moveModel(pid, mIdx, -1)}
+                                disabled={mIdx === 0}
+                                className="p-0.5 rounded text-slate-500 hover:text-sky-400 disabled:opacity-20 transition-colors"
+                                title="جابجایی مدل به بالا"
+                              >
+                                <ArrowUp className="w-2 h-2" />
+                              </button>
+                              <button
+                                onClick={() => moveModel(pid, mIdx, 1)}
+                                disabled={mIdx === orderedModels.length - 1}
+                                className="p-0.5 rounded text-slate-500 hover:text-sky-400 disabled:opacity-20 transition-colors"
+                                title="جابجایی مدل به پایین"
+                              >
+                                <ArrowDown className="w-2 h-2" />
+                              </button>
+                            </div>
+
+                            {/* Select Radio */}
+                            <button
+                              onClick={() => onChangeModel(pid, model.id)}
+                              className={`w-2 h-2 rounded-full shrink-0 border transition-all ${
+                                isSelectedModel && isActive
+                                  ? 'bg-emerald-400 border-emerald-400'
+                                  : 'border-slate-500 hover:border-sky-400'
+                              }`}
+                              title="انتخاب مدل"
+                            />
+
+                            {/* Model Info */}
+                            <button
+                              onClick={() => onChangeModel(pid, model.id)}
+                              className="flex-1 text-right min-w-0"
+                            >
+                              <div className={`text-[10.5px] font-medium truncate dir-ltr ${
+                                isSelectedModel && isActive ? 'text-emerald-300' : 'text-slate-300'
+                              }`}>
+                                {model.name}
+                              </div>
+                              <div className="flex items-center justify-between gap-1 mt-0.5">
+                                <span className="text-[9px] text-slate-500 truncate">
+                                  {model.contextWindow || '—'}
+                                </span>
+                                {model.isFree && (
+                                  <span className="text-[8.5px] text-sky-400 bg-sky-950/60 px-1 rounded font-semibold shrink-0">
+                                    رایگان
+                                  </span>
+                                )}
+                              </div>
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       {/* Active Provider Footer Badge */}
-      <div className="p-2.5 border-t border-slate-800 bg-slate-950 flex items-center justify-between text-xs">
-        <div className="flex items-center gap-2">
-          <Cpu className="w-3.5 h-3.5 text-sky-400" />
-          <span className="text-slate-300 text-[11px] font-medium">{providers[activeProviderId]?.nameFa}</span>
+      <div className="p-2 border-t border-slate-800 bg-slate-950 flex items-center justify-between text-xs">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="relative shrink-0">
+            <Cpu className="w-3.5 h-3.5 text-sky-400" />
+            <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400 border border-slate-950"></div>
+          </div>
+          <div className="min-w-0">
+            <div className="text-[10.5px] font-semibold text-slate-200 truncate">
+              {providers[activeProviderId]?.nameFa}
+            </div>
+            <div className="text-[9.5px] text-slate-500 truncate dir-ltr">
+              {providers[activeProviderId]?.models.find(
+                (m) => m.id === providers[activeProviderId]?.selectedModel
+              )?.name || '—'}
+            </div>
+          </div>
         </div>
-        <span className="text-[10px] text-sky-400 font-semibold px-2 py-0.5 rounded bg-sky-950 border border-sky-800/40">
+        <span className="text-[9px] text-emerald-400 font-semibold px-1.5 py-0.5 rounded bg-emerald-950/60 border border-emerald-800/40 shrink-0">
           فعال
         </span>
       </div>

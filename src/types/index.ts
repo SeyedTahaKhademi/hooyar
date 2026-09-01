@@ -93,4 +93,6 @@ export interface AppConfig {
   activeChatId: string;
   theme: 'dark' | 'light' | 'glass';
   fontSize: number;
+  providerOrder: ProviderId[];
+  modelOrder: Record<ProviderId, string[]>;
 }

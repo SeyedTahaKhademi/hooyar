@@ -1,6 +1,6 @@
 {
   "name": "hooyar",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "هویار - ایجنت هوشمند برنامه‌نویسی برای ویندوز",
   "main": "electron/main.js",
   "author": "Hooyar Team",

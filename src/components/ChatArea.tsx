@@ -24,7 +24,7 @@ import {
 interface ChatAreaProps {
   messages: Message[];
   onSendMessage: (text: string) => void;
-  onExecuteTool: (toolCall: ToolCall) => void;
+  onExecuteTool: (toolCall: ToolCall, continueLoop?: boolean) => void;
   autoApproveTools: boolean;
   onToggleAutoApprove: () => void;
   isProcessing: boolean;
@@ -202,13 +202,21 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
         {/* Action Button for Pending Tools */}
         {isPending && !autoApproveTools && (
-          <div className="flex justify-end pt-1">
+          <div className="flex justify-end gap-2 pt-1">
             <button
-              onClick={() => onExecuteTool(toolCall)}
+              onClick={() => onExecuteTool(toolCall, false)}
+              className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-sans text-[11px] font-medium transition-all border border-slate-700"
+              title="فقط این ابزار را اجرا کن، ادامه اتوماتیک نداشته باشه"
+            >
+              فقط اجرا
+            </button>
+            <button
+              onClick={() => onExecuteTool(toolCall, true)}
               className="flex items-center gap-1.5 px-3 py-1 rounded bg-sky-600 hover:bg-sky-500 text-white font-sans text-xs font-semibold shadow transition-all"
+              title="اجرا کن و نتیجه را برای ادامه کار به هوش مصنوعی بده"
             >
               <Play className="w-3 h-3" />
-              <span>تایید و اجرا</span>
+              <span>اجرا و ادامه</span>
             </button>
           </div>
         )}

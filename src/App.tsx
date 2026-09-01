@@ -23,6 +23,11 @@ interface TerminalLine {
   timestamp: string;
 }
 
+const DEFAULT_PROVIDER_ORDER: ProviderId[] = Object.keys(DEFAULT_PROVIDERS) as ProviderId[];
+const DEFAULT_MODEL_ORDER: Record<ProviderId, string[]> = Object.fromEntries(
+  Object.entries(DEFAULT_PROVIDERS).map(([id, cfg]) => [id, cfg.models.map((m) => m.id)])
+) as Record<ProviderId, string[]>;
+
 const defaultConfig: AppConfig = {
   activeProvider: 'gemini',
   activeModel: 'gemini-3.6-flash',
@@ -33,7 +38,9 @@ const defaultConfig: AppConfig = {
   chats: [{ id: 'default-chat', title: 'گفتگوی جدید', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), messages: [] }],
   activeChatId: 'default-chat',
   theme: 'dark',
-  fontSize: 13
+  fontSize: 13,
+  providerOrder: DEFAULT_PROVIDER_ORDER,
+  modelOrder: DEFAULT_MODEL_ORDER
 };
 
 function App() {
@@ -52,6 +59,12 @@ function App() {
       if (native?.loadConfig) {
         const saved = await native.loadConfig();
         if (saved && Object.keys(saved).length > 0) {
+          const mergedModelOrder: Record<ProviderId, string[]> = { ...DEFAULT_MODEL_ORDER };
+          if (saved.modelOrder && typeof saved.modelOrder === 'object') {
+            for (const k of Object.keys(saved.modelOrder) as ProviderId[]) {
+              if (Array.isArray(saved.modelOrder[k])) mergedModelOrder[k] = saved.modelOrder[k];
+            }
+          }
           setConfig((prev) => ({
             ...prev,
             ...saved,
@@ -60,7 +73,11 @@ function App() {
               ...(saved.providers || {})
             },
             chats: Array.isArray(saved.chats) && saved.chats.length ? saved.chats : prev.chats,
-            activeChatId: saved.activeChatId || prev.activeChatId
+            activeChatId: saved.activeChatId || prev.activeChatId,
+            providerOrder: Array.isArray(saved.providerOrder) && saved.providerOrder.length
+              ? saved.providerOrder
+              : DEFAULT_PROVIDER_ORDER,
+            modelOrder: mergedModelOrder
           }));
         }
       }
@@ -137,7 +154,7 @@ function App() {
     ]);
   };
 
-  const handleExecuteTool = async (toolCall: ToolCall) => {
+  const handleExecuteTool = async (toolCall: ToolCall, continueLoop: boolean = false) => {
     setAgentStatus('executing');
 
     if (toolCall.tool === 'execute_terminal_command') {
@@ -175,39 +192,174 @@ function App() {
       })
     }));
 
-    setAgentStatus('idle');
+    if (continueLoop) {
+      const out =
+        updatedToolCall.status === 'completed'
+          ? (updatedToolCall.result !== undefined
+              ? (typeof updatedToolCall.result === 'string'
+                  ? updatedToolCall.result
+                  : JSON.stringify(updatedToolCall.result, null, 2))
+              : 'انجام شد (بدون خروجی).')
+          : `خطا: ${updatedToolCall.error || 'نامشخص'}`;
+
+      const feedbackContent =
+        `خروجی ابزار (${toolCall.tool}):\n${out}\n\n` +
+        'اگر اطلاعات کافی است پاسخ نهایی فارسی بده، در غیر این صورت ابزارهای بعدی را با ```json ارسال کن.';
+
+      const feedbackMessage: Message = {
+        id: generateId(),
+        sender: 'system',
+        content: feedbackContent,
+        timestamp: nowStr()
+      };
+
+      setIsProcessing(true);
+      try {
+        const finalWorking = await new Promise<Message[]>((resolve) => {
+          setConfig((prev) => {
+            const updatedChats = prev.chats.map((chat) =>
+              chat.id !== prev.activeChatId
+                ? chat
+                : { ...chat, messages: [...chat.messages, feedbackMessage], updatedAt: new Date().toISOString() }
+            );
+            const thisChat = updatedChats.find((c) => c.id === prev.activeChatId)!;
+            resolve(thisChat.messages);
+            return { ...prev, chats: updatedChats };
+          });
+        });
+        await runAgentLoop(finalWorking, 6);
+      } catch (err: any) {
+        addMessage('system', `خطا در ادامه حلقه ایجنت: ${err.message}`);
+      } finally {
+        setIsProcessing(false);
+        setAgentStatus('idle');
+      }
+    }
+
     return updatedToolCall;
   };
 
-  const handleSendMessage = async (text: string) => {
-    if (isProcessing) return;
-
-    addMessage('user', text);
-    setIsProcessing(true);
-    setAgentStatus('thinking');
-
+  const runAgentLoop = useCallback(async (
+    workingMessages: Message[],
+    maxIterations: number = 8
+  ) => {
     const currentProvider = config.providers[config.activeProvider];
-    const allMessages: Message[] = [
-      ...messages,
-      { id: generateId(), sender: 'user', content: text, timestamp: nowStr() }
-    ];
+    let iter = 0;
+    let lastMessages = [...workingMessages];
 
-    try {
-      const result = await runAgentStep(
+    while (iter < maxIterations) {
+      iter++;
+      setAgentStatus('thinking');
+
+      const stepResult = await runAgentStep(
         currentProvider,
-        allMessages,
+        lastMessages,
         config.workspacePath,
         config.systemPrompt
       );
 
-      addMessage('agent', result.text, result.toolCalls);
+      const agentMsgId = generateId();
+      const agentMessage: Message = {
+        id: agentMsgId,
+        sender: 'agent',
+        content: stepResult.text,
+        timestamp: nowStr(),
+        toolCalls: stepResult.toolCalls
+      };
 
-      if (config.autoApproveTools && result.toolCalls.length > 0) {
-        setAgentStatus('executing');
-        for (const tc of result.toolCalls) {
-          await handleExecuteTool(tc);
-        }
+      setConfig((prev) => ({
+        ...prev,
+        chats: prev.chats.map((chat) => chat.id !== prev.activeChatId ? chat : {
+          ...chat,
+          updatedAt: new Date().toISOString(),
+          messages: [...chat.messages, agentMessage]
+        })
+      }));
+      lastMessages = [...lastMessages, agentMessage];
+
+      if (!stepResult.toolCalls || stepResult.toolCalls.length === 0) {
+        return;
       }
+
+      if (!config.autoApproveTools) {
+        return;
+      }
+
+      setAgentStatus('executing');
+      const toolResults: string[] = [];
+      for (const tc of stepResult.toolCalls) {
+        const executed = await handleExecuteTool(tc);
+        const out =
+          executed.status === 'completed'
+            ? (executed.result !== undefined
+                ? (typeof executed.result === 'string' ? executed.result : JSON.stringify(executed.result, null, 2))
+                : 'انجام شد (بدون خروجی).')
+            : `خطا: ${executed.error || 'نامشخص'}`;
+        toolResults.push(`نتیجه ابزار (${tc.tool}#${tc.id}):\n${out}`);
+      }
+
+      const feedbackContent =
+        'خروجی ابزارهای اجراشده:\n\n' + toolResults.join('\n---\n') +
+        '\n\nاگر اطلاعات کافی است، پاسخ نهایی را به زبان فارسی به کاربر بده. در غیر این صورت ابزارهای بعدی را در همان پاسخ (با ```json) ارسال کن.';
+
+      const feedbackMessage: Message = {
+        id: generateId(),
+        sender: 'system',
+        content: feedbackContent,
+        timestamp: nowStr()
+      };
+      setConfig((prev) => ({
+        ...prev,
+        chats: prev.chats.map((chat) => chat.id !== prev.activeChatId ? chat : {
+          ...chat,
+          updatedAt: new Date().toISOString(),
+          messages: [...chat.messages, feedbackMessage]
+        })
+      }));
+      lastMessages = [...lastMessages, feedbackMessage];
+    }
+
+    const limitMsg: Message = {
+      id: generateId(),
+      sender: 'system',
+      content: 'حداکثر تعداد مراحل اجرای ابزار به پایان رسید. برای ادامه دستور جدیدی وارد کنید.',
+      timestamp: nowStr()
+    };
+    setConfig((prev) => ({
+      ...prev,
+      chats: prev.chats.map((chat) => chat.id !== prev.activeChatId ? chat : {
+        ...chat,
+        messages: [...chat.messages, limitMsg]
+      })
+    }));
+  }, [config.activeProvider, config.providers, config.workspacePath, config.systemPrompt, config.autoApproveTools]);
+
+  const handleSendMessage = async (text: string) => {
+    if (isProcessing) return;
+
+    const userMsgId = generateId();
+    const userMessage: Message = {
+      id: userMsgId,
+      sender: 'user',
+      content: text,
+      timestamp: nowStr()
+    };
+
+    setConfig((prev) => ({
+      ...prev,
+      chats: prev.chats.map((chat) => chat.id !== prev.activeChatId ? chat : {
+        ...chat,
+        title: chat.messages.length === 0 ? text.trim().slice(0, 42) || 'گفتگوی جدید' : chat.title,
+        messages: [...chat.messages, userMessage]
+      })
+    }));
+
+    setIsProcessing(true);
+    setAgentStatus('thinking');
+
+    try {
+      const workingMessages: Message[] = [...messages, userMessage];
+      await runAgentLoop(workingMessages);
     } catch (err: any) {
       addMessage('system', `خطا در برقراری ارتباط با مدل: ${err.message}`);
       setAgentStatus('error');
@@ -288,6 +440,53 @@ function App() {
     }));
   };
 
+  const handleChangeProviderModel = (providerId: ProviderId, modelId: string) => {
+    setConfig((prev) => {
+      const isActiveProvider = prev.activeProvider === providerId;
+      return {
+        ...prev,
+        activeModel: isActiveProvider ? modelId : prev.activeModel,
+        providers: {
+          ...prev.providers,
+          [providerId]: {
+            ...prev.providers[providerId],
+            selectedModel: modelId
+          }
+        }
+      };
+    });
+  };
+
+  const handleReorderProviders = (fromIdx: number, toIdx: number) => {
+    setConfig((prev) => {
+      const order = [...prev.providerOrder];
+      const [moved] = order.splice(fromIdx, 1);
+      order.splice(toIdx, 0, moved);
+      return { ...prev, providerOrder: order };
+    });
+  };
+
+  const handleReorderModels = (providerId: ProviderId, fromIdx: number, toIdx: number) => {
+    setConfig((prev) => {
+      const current = prev.modelOrder[providerId] || prev.providers[providerId]?.models.map((m) => m.id) || [];
+      const order = [...current];
+      const [moved] = order.splice(fromIdx, 1);
+      order.splice(toIdx, 0, moved);
+      return {
+        ...prev,
+        modelOrder: { ...prev.modelOrder, [providerId]: order }
+      };
+    });
+  };
+
+  const handleCycleTheme = () => {
+    setConfig((prev) => {
+      const order: AppConfig['theme'][] = ['dark', 'light', 'glass'];
+      const cur = order.indexOf(prev.theme);
+      return { ...prev, theme: order[(cur + 1) % order.length] };
+    });
+  };
+
   const handleToggleAutoApprove = () => {
     setConfig((prev) => ({ ...prev, autoApproveTools: !prev.autoApproveTools }));
   };
@@ -308,6 +507,8 @@ function App() {
         isTerminalOpen={isTerminalOpen}
         agentStatus={agentStatus}
         onNewChat={handleNewChat}
+        theme={config.theme}
+        onCycleTheme={handleCycleTheme}
       />
 
       {/* Main Content */}
@@ -327,6 +528,13 @@ function App() {
           onSelectChat={handleSelectChat}
           onDeleteChat={handleDeleteChat}
           onEditChatTitle={handleEditChatTitle}
+          onChangeProvider={handleChangeProvider}
+          onChangeModel={handleChangeProviderModel}
+          onReorderProviders={handleReorderProviders}
+          onReorderModels={handleReorderModels}
+          providerOrder={config.providerOrder}
+          modelOrder={config.modelOrder}
+          onOpenSettings={() => setIsSettingsOpen(true)}
         />
 
         {/* Chat & Terminal Container */}
