@@ -1,4 +1,4 @@
-# 🤖 Hooyar (هویار) - AI Coding Agent
+# Hooyar (هویار) - AI Coding Agent
 
 <div align="center">
   <img src="assets/hooyar.png" width="128" height="128" alt="Hooyar Logo">
