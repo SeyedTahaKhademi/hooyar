@@ -1,33 +1,94 @@
 import { Message, ProviderConfig, ToolCall } from '../types';
 import { apiFetch } from './apiClient';
 
-export const SYSTEM_PROMPT_DEFAULT = `You are Hooyar (هویار), an elite autonomous AI Coding Agent running directly on the user's desktop computer.
+export const SYSTEM_PROMPT_DEFAULT = `You are Hooyar (هویار), an elite autonomous AI Coding Agent running directly on the user's Windows desktop.
 You assist developers in writing code, creating projects, debugging errors, managing workspace files, and executing terminal commands.
 
 Capabilities & Tools:
-You can request tool actions using JSON format in your response block:
+You can request ONE batch of tool actions per turn using JSON blocks in your response:
 \`\`\`json
 {
   "tool": "read_file" | "write_file" | "list_directory" | "execute_terminal_command" | "search_workspace",
   "args": {
-    "path": "path/to/file",
-    "content": "file contents",
-    "command": "terminal command line"
+    "path": "relative/or/absolute/path",
+    "content": "full file contents for write_file",
+    "command": "terminal command line",
+    "query": "search keyword for search_workspace"
   }
 }
 \`\`\`
 
 Tool details:
-1. read_file: Reads content of a target file.
-2. write_file: Creates a new file or updates existing file content.
-3. list_directory: Lists directory contents.
-4. execute_terminal_command: Runs shell/powershell commands (npm install, python script.py, etc.) in the active workspace.
-5. search_workspace: Finds files or text matching a query.
+1. read_file: Reads the content of a file ({"path": "..."}).
+2. write_file: Creates or updates a file ({"path": "...", "content": "..."}). Always write the COMPLETE final file content.
+3. list_directory: Lists the workspace or a subfolder ({"path": "..."} — optional).
+4. execute_terminal_command: Runs a PowerShell command in the active workspace (npm install, python script.py, etc.).
+5. search_workspace: Searches file names AND file contents for a keyword ({"query": "...", "path": "..."} — path optional).
+
+Execution protocol (very important):
+- After you emit tool JSON blocks, STOP and wait. The Hooyar runtime executes them and sends you a
+  "[TOOL RESULTS]" message with the real outputs. Never invent or assume tool results.
+- Then continue: either emit more tool calls or deliver the final answer to the user.
+- All file paths must stay inside the active workspace folder. The sandbox blocks anything outside it.
+- Terminal commands run with a 120 second timeout; avoid interactive commands.
 
 Directives:
-- Respond politely in Persian (فونت وزیر) for explanations, while keeping code, file paths, and terminal commands accurately formatted in standard syntax.
+- Respond politely in Persian for explanations, while keeping code, file paths, and terminal commands accurately formatted in standard syntax.
 - Always provide clean, efficient, production-ready code.
-- When generating files, use the write_file tool JSON blocks so the user can apply them directly to their machine.`;
+- When generating files, use the write_file tool JSON blocks so the file is actually created on the user's machine.
+- If a task needs several steps, work through them gradually instead of guessing.`;
+
+/**
+ * Builds the runtime message that feeds real tool outputs back to the
+ * model so it can continue the task (the autonomous agent loop).
+ */
+export function buildToolResultsPrompt(results: ToolCall[]): string {
+  const formatResult = (value: unknown): string => {
+    if (value === undefined || value === null) return '';
+    const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+    return text.length > 8000 ? `${text.slice(0, 8000)}\n... [truncated]` : text;
+  };
+
+  const blocks = results.map((r, index) => {
+    const lines = [
+      `${index + 1}) tool: ${r.tool}`,
+      `   status: ${r.status}`,
+      r.error ? `   error: ${r.error}` : '',
+      `   result:`,
+      formatResult(r.result) || '   (empty)'
+    ].filter(Boolean);
+    return lines.join('\n');
+  });
+
+  return [
+    '[TOOL RESULTS] — automated runtime message from Hooyar (not from the human user).',
+    'These are the real outputs of the tools you requested:',
+    '',
+    ...blocks,
+    '',
+    'Continue the task using these results: emit new tool JSON blocks if you still need information, or present the final answer in Persian.'
+  ].join('\n');
+}
+
+const MAX_CONTEXT_CHARS = 120000;
+
+/**
+ * Keeps the most recent messages that fit into the character budget so
+ * long conversations do not overflow the model context window.
+ */
+function trimForContext(messages: Array<{ role: string; content: string }>): Array<{ role: string; content: string }> {
+  const kept: Array<{ role: string; content: string }> = [];
+  let total = 0;
+
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const len = messages[i].content.length;
+    if (total + len > MAX_CONTEXT_CHARS && kept.length >= 4) break;
+    total += len;
+    kept.unshift(messages[i]);
+  }
+
+  return kept;
+}
 
 function formatProviderError(provider: ProviderConfig, status: number, responseBody: string): string {
   let apiMessage = responseBody;
@@ -83,10 +144,12 @@ export async function runAgentStep(
 
   const apiMessages = [
     { role: 'system', content: sysPrompt + contextHeader },
-    ...messages.map((m) => ({
-      role: m.sender === 'user' ? 'user' : 'assistant',
-      content: m.content
-    }))
+    ...trimForContext(
+      messages.map((m) => ({
+        role: m.sender === 'user' ? 'user' : 'assistant',
+        content: m.content
+      }))
+    )
   ];
 
   try {
@@ -127,7 +190,7 @@ export async function runAgentStep(
         const parsed = JSON.parse(match[1]);
         if (parsed.tool && parsed.args) {
           toolCalls.push({
-            id: 'tool-' + Math.random().toString(36).substr(2, 9),
+            id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'tool-' + Math.random().toString(36).slice(2, 11),
             tool: parsed.tool,
             args: parsed.args,
             status: 'pending'
@@ -211,6 +274,29 @@ export async function executeTool(toolCall: ToolCall, workspacePath: string | nu
         } else {
           copyTool.status = 'failed';
           copyTool.error = res.error || res.stderr || 'خطا در اجرای دستور ترمینال.';
+        }
+        break;
+      }
+
+      case 'search_workspace': {
+        const query = toolCall.args.query || toolCall.args.text || toolCall.args.keyword || '';
+        const targetPath = toolCall.args.path || workspacePath;
+        if (!query || !String(query).trim()) {
+          copyTool.status = 'failed';
+          copyTool.error = 'عبارت جستجو (query) مشخص نشده است.';
+          break;
+        }
+        const res = await native.searchWorkspace(String(query), targetPath);
+        if (res.success) {
+          copyTool.status = 'completed';
+          const results = res.results || [];
+          copyTool.result =
+            results.length === 0
+              ? 'هیچ نتیجه‌ای برای این عبارت پیدا نشد.'
+              : results;
+        } else {
+          copyTool.status = 'failed';
+          copyTool.error = res.error;
         }
         break;
       }

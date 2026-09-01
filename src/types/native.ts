@@ -13,6 +13,14 @@ export interface NativeBridge {
     command: string,
     cwd?: string
   ) => Promise<{ success: boolean; stdout: string; stderr: string; error?: string }>;
+  searchWorkspace: (
+    query: string,
+    targetPath?: string | null
+  ) => Promise<{
+    success: boolean;
+    results?: Array<{ type: 'filename' | 'content'; path: string; snippet: string }>;
+    error?: string;
+  }>;
   aiRequest: (payload: {
     url: string;
     method?: string;

@@ -349,6 +349,89 @@ ipcMain.handle('ai:request', async (_, { url, method = 'GET', headers = {}, body
 });
 
 /* ------------------------------------------------------------------ */
+/* IPC — workspace search (sandboxed)                                  */
+/* ------------------------------------------------------------------ */
+
+const TEXT_EXTENSIONS = new Set([
+  '.js', '.jsx', '.ts', '.tsx', '.json', '.md', '.txt', '.css', '.scss', '.html',
+  '.py', '.java', '.c', '.cpp', '.h', '.hpp', '.cs', '.go', '.rs', '.rb', '.php',
+  '.yml', '.yaml', '.xml', '.sh', '.ps1', '.sql', '.ini', '.cfg', '.toml', '.svg',
+  '.vue', '.svelte', '.swift', '.kt', '.dart'
+]);
+const MAX_SEARCH_RESULTS = 60;
+const MAX_SEARCH_FILE_BYTES = 1024 * 1024; // 1 MB
+const MAX_SEARCH_DEPTH = 10;
+
+ipcMain.handle('fs:search', async (_, { query, targetPath }) => {
+  try {
+    if (!currentWorkspace) {
+      return { success: false, error: 'ابتدا پوشه کاری پروژه را انتخاب کنید.' };
+    }
+    const root = targetPath && isPathAllowed(targetPath) ? path.resolve(targetPath) : currentWorkspace;
+    const q = String(query || '').toLowerCase();
+    if (!q.trim()) {
+      return { success: false, error: 'عبارت جستجو خالی است.' };
+    }
+
+    const results = [];
+
+    function walk(dir, depth) {
+      if (depth > MAX_SEARCH_DEPTH || results.length >= MAX_SEARCH_RESULTS) return;
+      let items;
+      try {
+        items = fs.readdirSync(dir, { withFileTypes: true });
+      } catch {
+        return; // unreadable folder — skip silently
+      }
+
+      for (const item of items) {
+        if (results.length >= MAX_SEARCH_RESULTS) return;
+        if (IGNORE_LIST.includes(item.name)) continue;
+
+        const fullPath = path.join(dir, item.name);
+
+        if (item.isDirectory()) {
+          walk(fullPath, depth + 1);
+          continue;
+        }
+
+        // 1) filename match
+        if (item.name.toLowerCase().includes(q)) {
+          results.push({ type: 'filename', path: fullPath, snippet: '' });
+          continue;
+        }
+
+        // 2) content match (text files only)
+        const ext = path.extname(item.name).toLowerCase();
+        if (!TEXT_EXTENSIONS.has(ext)) continue;
+        try {
+          const stat = fs.statSync(fullPath);
+          if (stat.size > MAX_SEARCH_FILE_BYTES) continue;
+          const content = fs.readFileSync(fullPath, 'utf8');
+          const lower = content.toLowerCase();
+          const idx = lower.indexOf(q);
+          if (idx !== -1) {
+            const start = Math.max(0, idx - 80);
+            const snippet = content
+              .slice(start, idx + q.length + 120)
+              .replace(/\s+/g, ' ')
+              .trim();
+            results.push({ type: 'content', path: fullPath, snippet });
+          }
+        } catch {
+          // binary or unreadable file — skip
+        }
+      }
+    }
+
+    walk(root, 0);
+    return { success: true, results };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+/* ------------------------------------------------------------------ */
 /* IPC — config                                                        */
 /* ------------------------------------------------------------------ */
 

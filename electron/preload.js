@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('hooyarNative', {
   writeFile: (filePath, content) => ipcRenderer.invoke('fs:writeFile', { filePath, content }),
   deleteFile: (filePath) => ipcRenderer.invoke('fs:deleteFile', filePath),
   executeTerminal: (command, cwd) => ipcRenderer.invoke('terminal:execute', { command, cwd }),
+  searchWorkspace: (query, targetPath) => ipcRenderer.invoke('fs:search', { query, targetPath }),
   aiRequest: (payload) => ipcRenderer.invoke('ai:request', payload),
   saveTextFile: (defaultName, content) => ipcRenderer.invoke('dialog:saveTextFile', { defaultName, content }),
   loadConfig: () => ipcRenderer.invoke('config:load'),

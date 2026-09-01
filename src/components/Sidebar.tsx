@@ -15,7 +15,8 @@ import {
   Cpu,
   Layers,
   MessageSquare,
-  Plus
+  Plus,
+  Download
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -30,6 +31,7 @@ interface SidebarProps {
   activeChatId: string;
   onNewChat: () => void;
   onSelectChat: (chatId: string) => void;
+  onExportChat: () => void;
 }
 
 const FileItem: React.FC<{ node: FileNode; onSelectFile: (path: string) => void }> = ({ node, onSelectFile }) => {
@@ -96,7 +98,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   chats,
   activeChatId,
   onNewChat,
-  onSelectChat
+  onSelectChat,
+  onExportChat
 }) => {
   const [activeTab, setActiveTab] = useState<'files' | 'prompts' | 'chats'>('files');
 
@@ -214,12 +217,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
-          <button
-            onClick={onNewChat}
-            className="w-full flex items-center justify-center gap-1.5 p-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold transition-all"
-          >
-            <Plus className="w-3.5 h-3.5" /> گفتگوی جدید
-          </button>
+          <div className="flex gap-1.5">
+            <button
+              onClick={onNewChat}
+              className="flex-1 flex items-center justify-center gap-1.5 p-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold transition-all"
+            >
+              <Plus className="w-3.5 h-3.5" /> گفتگوی جدید
+            </button>
+            <button
+              onClick={onExportChat}
+              className="p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-sky-500/50 text-slate-400 hover:text-sky-400 transition-all"
+              title="خروجی گرفتن گفتگوی فعال (Markdown)"
+            >
+              <Download className="w-3.5 h-3.5" />
+            </button>
+          </div>
           <div className="pt-1 space-y-1">
             {chats.map((chat) => (
               <button

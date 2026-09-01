@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './index.css';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
@@ -6,11 +6,13 @@ import { ChatArea } from './components/ChatArea';
 import { TerminalView } from './components/TerminalView';
 import { SettingsModal } from './components/SettingsModal';
 import { DEFAULT_PROVIDERS } from './services/aiProviders';
-import { runAgentStep, executeTool, SYSTEM_PROMPT_DEFAULT } from './services/agentEngine';
+import { runAgentStep, executeTool, buildToolResultsPrompt, SYSTEM_PROMPT_DEFAULT } from './services/agentEngine';
 import { AppConfig, ChatSession, FileNode, Message, ProviderId, ToolCall } from './types';
 
 function generateId() {
-  return Math.random().toString(36).substr(2, 12);
+  return typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID().replace(/-/g, '').slice(0, 12)
+    : Math.random().toString(36).slice(2, 14);
 }
 
 function nowStr() {
@@ -114,6 +116,13 @@ function App() {
   const activeChat = config.chats.find((chat) => chat.id === config.activeChatId) || config.chats[0];
   const messages = activeChat?.messages || [];
 
+  // Mirror of the conversation used by async agent flows without relying
+  // on possibly-stale closure state.
+  const messagesRef = useRef<Message[]>([]);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
   const addMessage = (sender: 'user' | 'agent' | 'system', content: string, toolCalls?: ToolCall[]) => {
     const msg: Message = {
       id: generateId(),
@@ -145,9 +154,8 @@ function App() {
     ]);
   };
 
-  const handleExecuteTool = async (toolCall: ToolCall) => {
-    setAgentStatus('executing');
-
+  /** Executes a single tool call and updates chat/terminal/file-tree state. */
+  const runSingleTool = async (toolCall: ToolCall): Promise<ToolCall> => {
     if (toolCall.tool === 'execute_terminal_command') {
       addTerminalLine('command', toolCall.args.command || '');
       setIsTerminalOpen(true);
@@ -165,7 +173,9 @@ function App() {
     }
 
     if (
-      (updatedToolCall.tool === 'write_file' || updatedToolCall.tool === 'list_directory') &&
+      (updatedToolCall.tool === 'write_file' ||
+        updatedToolCall.tool === 'list_directory' ||
+        updatedToolCall.tool === 'search_workspace') &&
       config.workspacePath
     ) {
       await refreshFileTree(config.workspacePath);
@@ -183,39 +193,92 @@ function App() {
       })
     }));
 
-    setAgentStatus('idle');
     return updatedToolCall;
   };
 
-  const handleSendMessage = async (text: string) => {
-    if (isProcessing) return;
+  /**
+   * The autonomous agent loop: calls the model, executes the tools it
+   * requests (auto-approve mode), feeds the real results back and repeats
+   * until the model delivers its final answer or the step budget ends.
+   */
+  const MAX_AGENT_STEPS = 8;
 
-    addMessage('user', text);
-    setIsProcessing(true);
-    setAgentStatus('thinking');
+  const driveAgent = async (
+    initialMessages: Array<Pick<Message, 'sender' | 'content'>>
+  ): Promise<void> => {
+    let apiMessages = initialMessages;
 
-    const currentProvider = config.providers[config.activeProvider];
-    const allMessages: Message[] = [
-      ...messages,
-      { id: generateId(), sender: 'user', content: text, timestamp: nowStr() }
-    ];
+    for (let step = 0; step < MAX_AGENT_STEPS; step++) {
+      setAgentStatus('thinking');
 
-    try {
       const result = await runAgentStep(
-        currentProvider,
-        allMessages,
+        config.providers[config.activeProvider],
+        apiMessages as Message[],
         config.workspacePath,
         config.systemPrompt
       );
 
       addMessage('agent', result.text, result.toolCalls);
 
-      if (config.autoApproveTools && result.toolCalls.length > 0) {
-        setAgentStatus('executing');
-        for (const tc of result.toolCalls) {
-          await handleExecuteTool(tc);
-        }
+      const shouldAutoRun = config.autoApproveTools && result.toolCalls.length > 0;
+      if (!shouldAutoRun) return;
+
+      setAgentStatus('executing');
+      const executed: ToolCall[] = [];
+      for (const tc of result.toolCalls) {
+        executed.push(await runSingleTool(tc));
       }
+
+      if (step === MAX_AGENT_STEPS - 1) {
+        addMessage(
+          'system',
+          `حداکثر تعداد گام‌های اجرای خودکار (${MAX_AGENT_STEPS}) به پایان رسید. برای ادامه کار، درخواست خود را تکرار کنید.`
+        );
+        return;
+      }
+
+      apiMessages = [
+        ...apiMessages,
+        { sender: 'agent' as const, content: result.text },
+        { sender: 'user' as const, content: buildToolResultsPrompt(executed) }
+      ];
+    }
+  };
+
+  /** Manual tool approval (auto-approve OFF): execute, then let the model continue. */
+  const handleExecuteTool = async (toolCall: ToolCall) => {
+    if (isProcessing) return;
+    setIsProcessing(true);
+    setAgentStatus('executing');
+
+    try {
+      const updated = await runSingleTool(toolCall);
+      await driveAgent([
+        ...messagesRef.current,
+        { sender: 'user' as const, content: buildToolResultsPrompt([updated]) }
+      ]);
+    } catch (err: any) {
+      addMessage('system', `خطا در ادامه اجرای ایجنت: ${err.message}`);
+      setAgentStatus('error');
+    } finally {
+      setIsProcessing(false);
+      setAgentStatus('idle');
+    }
+  };
+
+  const handleSendMessage = async (text: string) => {
+    if (isProcessing) return;
+
+    setIsProcessing(true);
+
+    try {
+      const baseMessages: Array<Pick<Message, 'sender' | 'content'>> = [
+        ...messagesRef.current,
+        { sender: 'user' as const, content: text }
+      ];
+      addMessage('user', text);
+
+      await driveAgent(baseMessages);
     } catch (err: any) {
       addMessage('system', `خطا در برقراری ارتباط با مدل: ${err.message}`);
       setAgentStatus('error');
@@ -227,6 +290,27 @@ function App() {
 
   const handleQuickPrompt = (prompt: string) => {
     handleSendMessage(prompt);
+  };
+
+  /** Exports the active chat as a Markdown file via a native save dialog. */
+  const handleExportChat = async () => {
+    if (!native?.saveTextFile || !activeChat || activeChat.messages.length === 0) return;
+
+    const senderLabel = (sender: string) =>
+      sender === 'user' ? 'کاربر' : sender === 'agent' ? 'هویار (Hooyar AI)' : 'سیستم';
+
+    const markdown = [
+      `# ${activeChat.title}`,
+      '',
+      `> خروجی گرفته‌شده از هویار — ${new Date().toLocaleString('fa-IR')}`,
+      '',
+      ...activeChat.messages.map(
+        (m) => `## ${senderLabel(m.sender)} — ${m.timestamp}\n\n${m.content}\n`
+      )
+    ].join('\n');
+
+    const safeName = (activeChat.title || 'hooyar-chat').replace(/[\\/:*?"<>|]/g, '-');
+    await native.saveTextFile(`${safeName}.md`, markdown);
   };
 
   const handleNewChat = () => {
@@ -314,6 +398,7 @@ function App() {
           activeChatId={config.activeChatId}
           onNewChat={handleNewChat}
           onSelectChat={handleSelectChat}
+          onExportChat={handleExportChat}
         />
 
         {/* Chat & Terminal Container */}
