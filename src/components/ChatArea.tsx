@@ -12,7 +12,13 @@ import {
   Loader2, 
   Play, 
   ShieldCheck, 
-  Cpu
+  Cpu,
+  Copy,
+  Check,
+  FileJson,
+  FileText,
+  Hash,
+  Globe
 } from 'lucide-react';
 
 interface ChatAreaProps {
@@ -22,6 +28,7 @@ interface ChatAreaProps {
   autoApproveTools: boolean;
   onToggleAutoApprove: () => void;
   isProcessing: boolean;
+  fontSize?: number;
 }
 
 export const ChatArea: React.FC<ChatAreaProps> = ({
@@ -30,9 +37,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   onExecuteTool,
   autoApproveTools,
   onToggleAutoApprove,
-  isProcessing
+  isProcessing,
+  fontSize = 13
 }) => {
   const [inputText, setInputText] = useState('');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -57,6 +66,22 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     }
   };
 
+  const handleCopy = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const getLanguageIcon = (lang: string) => {
+    lang = lang.toLowerCase();
+    if (['javascript', 'js', 'typescript', 'ts', 'tsx', 'jsx'].includes(lang)) return <FileCode className="w-3.5 h-3.5 text-yellow-400" />;
+    if (['json'].includes(lang)) return <FileJson className="w-3.5 h-3.5 text-orange-400" />;
+    if (['css', 'scss', 'less', 'tailwind'].includes(lang)) return <Hash className="w-3.5 h-3.5 text-sky-400" />;
+    if (['html', 'xml'].includes(lang)) return <Globe className="w-3.5 h-3.5 text-orange-500" />;
+    if (['python', 'py'].includes(lang)) return <FileCode className="w-3.5 h-3.5 text-blue-500" />;
+    return <FileText className="w-3.5 h-3.5 text-slate-400" />;
+  };
+
   const renderInlineMarkdown = (text: string) => {
     const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*)/g);
     return parts.map((part, index) => {
@@ -68,26 +93,42 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     });
   };
 
-  const renderMarkdown = (content: string) => {
+  const renderMarkdown = (content: string, messageId: string) => {
     const sections = content.split(/```([\w+-]*)\n?([\s\S]*?)```/g);
     return sections.map((section, index) => {
       if (index % 3 === 2) {
         const language = sections[index - 1] || 'text';
+        const codeId = `${messageId}-code-${index}`;
         return (
-          <div key={index} className="my-3 overflow-hidden rounded-lg border border-slate-700 bg-[#0b1220] dir-ltr text-left">
-            <div className="px-3 py-1.5 border-b border-slate-800 text-[10px] text-sky-400 font-mono">{language}</div>
-            <pre className="p-3 overflow-x-auto text-[11px] leading-relaxed font-mono text-slate-200"><code>{section}</code></pre>
+          <div key={index} className="my-3 overflow-hidden rounded-lg border border-slate-700 bg-[#0b1220] dir-ltr text-left group/code max-w-full">
+            <div className="px-3 py-1.5 border-b border-slate-800 flex items-center justify-between bg-slate-900/50">
+              <div className="flex items-center gap-2">
+                {getLanguageIcon(language)}
+                <span className="text-[10px] text-slate-400 font-mono uppercase">{language}</span>
+              </div>
+              <button 
+                type="button"
+                onClick={() => handleCopy(section, codeId)}
+                className="p-1 hover:bg-slate-700 rounded transition-colors text-slate-400 hover:text-sky-400"
+                title="کپی کد"
+              >
+                {copiedId === codeId ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+            <pre className="p-3 overflow-x-auto text-[12px] leading-relaxed font-mono text-slate-200 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
+              <code className="block w-fit min-w-full">{section}</code>
+            </pre>
           </div>
         );
       }
       if (index % 3 === 1) return null;
       return (
-        <div key={index} className="whitespace-pre-wrap">
+        <div key={index} className="whitespace-pre-wrap break-words max-w-full overflow-hidden" style={{ fontSize: `${fontSize}px` }}>
           {section.split('\n').map((line, lineIndex) => {
-            if (line.startsWith('### ')) return <h3 key={lineIndex} className="mt-3 mb-1 font-bold text-sky-300">{renderInlineMarkdown(line.slice(4))}</h3>;
-            if (line.startsWith('## ')) return <h2 key={lineIndex} className="mt-3 mb-1 text-sm font-bold text-sky-200">{renderInlineMarkdown(line.slice(3))}</h2>;
-            if (line.startsWith('# ')) return <h1 key={lineIndex} className="mt-3 mb-1 text-base font-bold text-slate-100">{renderInlineMarkdown(line.slice(2))}</h1>;
-            if (/^[-*] /.test(line)) return <div key={lineIndex} className="pr-3 before:content-['•'] before:ml-2 before:text-sky-400">{renderInlineMarkdown(line.slice(2))}</div>;
+            if (line.startsWith('### ')) return <h3 key={lineIndex} className="mt-4 mb-2 font-bold text-sky-300 text-lg border-b border-slate-800 pb-1">{renderInlineMarkdown(line.slice(4))}</h3>;
+            if (line.startsWith('## ')) return <h2 key={lineIndex} className="mt-4 mb-2 text-xl font-bold text-sky-200 border-b border-slate-800 pb-1">{renderInlineMarkdown(line.slice(3))}</h2>;
+            if (line.startsWith('# ')) return <h1 key={lineIndex} className="mt-4 mb-2 text-2xl font-bold text-slate-100 border-b border-slate-800 pb-1">{renderInlineMarkdown(line.slice(2))}</h1>;
+            if (/^[-*] /.test(line)) return <div key={lineIndex} className="pr-4 py-0.5 relative before:content-[''] before:absolute before:right-0 before:top-2.5 before:w-1.5 before:h-1.5 before:bg-sky-500 before:rounded-full">{renderInlineMarkdown(line.slice(2))}</div>;
             return <React.Fragment key={lineIndex}>{renderInlineMarkdown(line)}{lineIndex < section.split('\n').length - 1 && <br />}</React.Fragment>;
           })}
         </div>
@@ -190,7 +231,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   };
 
   return (
-    <div className="flex-1 flex flex-col h-[calc(100vh-3.5rem)] bg-[#070a12] relative">
+    <div className="flex-1 flex flex-col h-[calc(100vh-2.5rem)] bg-[#070a12] relative overflow-hidden">
       {/* Messages Scroll View */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 ? (
@@ -208,10 +249,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         ) : (
           messages.map((msg) => {
             const isUser = msg.sender === 'user';
+            const messageId = msg.id;
             return (
               <div
                 key={msg.id}
-                className={`flex gap-3 max-w-4xl ${isUser ? 'mr-auto flex-row-reverse' : 'ml-auto'}`}
+                className={`flex gap-3 max-w-5xl ${isUser ? 'mr-auto flex-row-reverse' : 'ml-auto'}`}
               >
                 {/* Avatar */}
                 <div
@@ -226,22 +268,31 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
                 {/* Message Body */}
                 <div
-                  className={`flex-1 rounded-xl p-3.5 text-xs leading-relaxed border shadow-sm ${
+                  className={`flex-1 rounded-xl p-3.5 text-xs leading-relaxed border shadow-sm relative group ${
                     isUser
                       ? 'bg-slate-900 border-slate-800 text-slate-200 rounded-tr-none'
                       : 'glass-panel text-slate-200 rounded-tl-none'
-                  }`}
+                  } max-w-full overflow-hidden`}
                 >
-                  <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center justify-between mb-2">
                     <span className="font-semibold text-slate-300 text-[11px]">
                       {isUser ? 'کاربر' : 'هویار (Hooyar AI)'}
                     </span>
-                    <span className="text-[10px] text-slate-500">{msg.timestamp}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-slate-500">{msg.timestamp}</span>
+                      <button 
+                        onClick={() => handleCopy(msg.content, msg.id)}
+                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-800 rounded transition-all text-slate-400 hover:text-sky-400"
+                        title="کپی متن پیام"
+                      >
+                        {copiedId === msg.id ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      </button>
+                    </div>
                   </div>
 
                   {/* Message content */}
-                  <div className="font-sans text-slate-200 space-y-2 dir-rtl">
-                    {renderMarkdown(msg.content)}
+                  <div className="font-sans text-slate-200 space-y-2 dir-rtl overflow-hidden">
+                    {renderMarkdown(msg.content, messageId)}
                   </div>
 
                   {/* Render Tool Calls if present */}

@@ -32,7 +32,8 @@ const defaultConfig: AppConfig = {
   providers: DEFAULT_PROVIDERS,
   chats: [{ id: 'default-chat', title: 'گفتگوی جدید', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), messages: [] }],
   activeChatId: 'default-chat',
-  theme: 'dark'
+  theme: 'dark',
+  fontSize: 13
 };
 
 function App() {
@@ -117,13 +118,13 @@ function App() {
       ...prev,
       chats: prev.chats.map((chat) => chat.id === prev.activeChatId
         ? {
-            ...chat,
-            title: chat.messages.length === 0 && sender === 'user'
-              ? content.trim().slice(0, 42) || 'گفتگوی جدید'
-              : chat.title,
-            messages: [...chat.messages, msg],
-            updatedAt: new Date().toISOString()
-          }
+          ...chat,
+          title: chat.messages.length === 0 && sender === 'user'
+            ? content.trim().slice(0, 42) || 'گفتگوی جدید'
+            : chat.title,
+          messages: [...chat.messages, msg],
+          updatedAt: new Date().toISOString()
+        }
         : chat)
     }));
     return msg;
@@ -235,6 +236,25 @@ function App() {
     setConfig((prev) => ({ ...prev, activeChatId: chatId }));
   };
 
+  const handleDeleteChat = (chatId: string) => {
+    setConfig((prev) => {
+      const newChats = prev.chats.filter((c) => c.id !== chatId);
+      const nextChatId = newChats.length > 0 ? newChats[0].id : prev.activeChatId;
+      return {
+        ...prev,
+        chats: newChats,
+        activeChatId: chatId === prev.activeChatId ? nextChatId : prev.activeChatId
+      };
+    });
+  };
+
+  const handleEditChatTitle = (chatId: string, newTitle: string) => {
+    setConfig((prev) => ({
+      ...prev,
+      chats: prev.chats.map((c) => c.id === chatId ? { ...c, title: newTitle } : c)
+    }));
+  };
+
   const handleUpdateProvider = (providerId: ProviderId, updates: Partial<typeof DEFAULT_PROVIDERS[ProviderId]>) => {
     setConfig((prev) => ({
       ...prev,
@@ -305,6 +325,8 @@ function App() {
           activeChatId={config.activeChatId}
           onNewChat={handleNewChat}
           onSelectChat={handleSelectChat}
+          onDeleteChat={handleDeleteChat}
+          onEditChatTitle={handleEditChatTitle}
         />
 
         {/* Chat & Terminal Container */}
@@ -317,6 +339,7 @@ function App() {
             autoApproveTools={config.autoApproveTools}
             onToggleAutoApprove={handleToggleAutoApprove}
             isProcessing={isProcessing}
+            fontSize={config.fontSize}
           />
 
           {/* Terminal Panel */}
@@ -339,6 +362,9 @@ function App() {
         onUpdateSystemPrompt={(p) => setConfig((prev) => ({ ...prev, systemPrompt: p }))}
         autoApproveTools={config.autoApproveTools}
         onToggleAutoApprove={handleToggleAutoApprove}
+        theme={config.theme}
+        fontSize={config.fontSize}
+        onUpdateConfig={(updates) => setConfig((prev) => ({ ...prev, ...updates }))}
       />
     </div>
   );

@@ -8,5 +8,8 @@ contextBridge.exposeInMainWorld('hooyarNative', {
   deleteFile: (filePath) => ipcRenderer.invoke('fs:deleteFile', filePath),
   executeTerminal: (command, cwd) => ipcRenderer.invoke('terminal:execute', { command, cwd }),
   loadConfig: () => ipcRenderer.invoke('config:load'),
-  saveConfig: (data) => ipcRenderer.invoke('config:save', data)
+  saveConfig: (data) => ipcRenderer.invoke('config:save', data),
+  windowMinimize: () => ipcRenderer.send('window:minimize'),
+  windowMaximize: () => ipcRenderer.send('window:maximize'),
+  windowClose: () => ipcRenderer.send('window:close')
 });

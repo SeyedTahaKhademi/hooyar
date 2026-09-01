@@ -18,7 +18,12 @@ import {
   Sliders,
   Terminal,
   ShieldCheck,
-  HelpCircle
+  HelpCircle,
+  Palette,
+  Type,
+  Sun,
+  Moon,
+  Wind
 } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -30,6 +35,9 @@ interface SettingsModalProps {
   onUpdateSystemPrompt: (prompt: string) => void;
   autoApproveTools: boolean;
   onToggleAutoApprove: () => void;
+  theme: 'dark' | 'light' | 'glass';
+  fontSize: number;
+  onUpdateConfig: (updates: Partial<{ theme: 'dark' | 'light' | 'glass'; fontSize: number }>) => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -40,9 +48,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   systemPrompt,
   onUpdateSystemPrompt,
   autoApproveTools,
-  onToggleAutoApprove
+  onToggleAutoApprove,
+  theme,
+  fontSize,
+  onUpdateConfig
 }) => {
-  const [activeTab, setActiveTab] = useState<'providers' | 'agent' | 'system' | 'guide'>('providers');
+  const [activeTab, setActiveTab] = useState<'providers' | 'appearance' | 'agent' | 'system' | 'guide'>('providers');
   const [expandedProvider, setExpandedProvider] = useState<ProviderId | null>('gemini');
   const [verifyingId, setVerifyingId] = useState<ProviderId | null>(null);
   const [verifyResults, setVerifyResults] = useState<Record<string, { success: boolean; message: string }>>({});
@@ -79,11 +90,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
     return (
       <div
-        className={`rounded-lg border transition-all mb-2 ${
-          isExpanded
-            ? 'bg-slate-900 border-sky-500/40 shadow-sm'
-            : 'bg-slate-900/60 border-slate-800 hover:border-slate-750'
-        }`}
+        className={`rounded-lg border transition-all mb-2 ${isExpanded
+          ? 'bg-slate-900 border-sky-500/40 shadow-sm'
+          : 'bg-slate-900/60 border-slate-800 hover:border-slate-750'
+          }`}
       >
         <button
           onClick={() => setExpandedProvider(isExpanded ? null : provider.id)}
@@ -91,13 +101,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         >
           <div className="flex items-center gap-3">
             <div
-              className={`w-2 h-2 rounded-full shrink-0 ${
-                provider.isVerified
-                  ? 'bg-emerald-500'
-                  : provider.apiKey
+              className={`w-2 h-2 rounded-full shrink-0 ${provider.isVerified
+                ? 'bg-emerald-500'
+                : provider.apiKey
                   ? 'bg-sky-400'
                   : 'bg-slate-600'
-              }`}
+                }`}
             />
             <div className="text-right">
               <div className="flex items-center gap-2">
@@ -212,11 +221,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {/* Verification Result */}
             {verifyResult && (
               <div
-                className={`flex items-center gap-2 p-2 rounded text-[11px] font-medium border ${
-                  verifyResult.success
-                    ? 'bg-emerald-950/40 border-emerald-800/40 text-emerald-400'
-                    : 'bg-rose-950/40 border-rose-800/40 text-rose-400'
-                }`}
+                className={`flex items-center gap-2 p-2 rounded text-[11px] font-medium border ${verifyResult.success
+                  ? 'bg-emerald-950/40 border-emerald-800/40 text-emerald-400'
+                  : 'bg-rose-950/40 border-rose-800/40 text-rose-400'
+                  }`}
               >
                 {verifyResult.success ? (
                   <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
@@ -254,20 +262,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         {/* Tab Navigation */}
         <div className="flex gap-1 p-2 border-b border-slate-800 bg-slate-950 overflow-x-auto shrink-0">
-          {(['providers', 'agent', 'system', 'guide'] as const).map((tab) => (
+          {(['providers', 'appearance', 'agent', 'system', 'guide'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-semibold transition-all ${
-                activeTab === tab
-                  ? 'bg-sky-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-              }`}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-semibold transition-all ${activeTab === tab
+                ? 'bg-sky-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
             >
               {tab === 'providers' && (
                 <>
                   <Key className="w-3.5 h-3.5" />
                   <span>کلیدهای API</span>
+                </>
+              )}
+              {tab === 'appearance' && (
+                <>
+                  <Palette className="w-3.5 h-3.5" />
+                  <span>ظاهر و فونت</span>
                 </>
               )}
               {tab === 'agent' && (
@@ -318,6 +331,67 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           )}
 
+          {activeTab === 'appearance' && (
+            <div className="space-y-4">
+              <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 space-y-3">
+                <h3 className="text-xs font-semibold text-slate-200 flex items-center gap-2">
+                  <Palette className="w-3.5 h-3.5 text-sky-400" /> انتخاب تم نرم‌افزار
+                </h3>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'dark', name: 'تاریک', icon: Moon },
+                    { id: 'light', name: 'روشن', icon: Sun },
+                    { id: 'glass', name: 'شیشه‌ای', icon: Wind },
+                  ].map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => onUpdateConfig({ theme: t.id as any })}
+                      className={`flex flex-col items-center gap-2 p-3 rounded-lg border transition-all ${theme === t.id
+                          ? 'bg-sky-600 border-sky-400 text-white shadow-lg shadow-sky-900/20'
+                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                        }`}
+                    >
+                      <t.icon className="w-5 h-5" />
+                      <span className="text-[11px] font-bold">{t.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 space-y-3">
+                <h3 className="text-xs font-semibold text-slate-200 flex items-center gap-2">
+                  <Type className="w-3.5 h-3.5 text-sky-400" /> اندازه فونت گفتگو
+                </h3>
+                <div className="bg-slate-950 p-4 rounded-lg border border-slate-800 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-400">اندازه: {fontSize}px</span>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => onUpdateConfig({ fontSize: Math.max(10, fontSize - 1) })}
+                        className="w-8 h-8 flex items-center justify-center rounded bg-slate-800 hover:bg-slate-700 text-slate-200"
+                      >-</button>
+                      <button
+                        onClick={() => onUpdateConfig({ fontSize: Math.min(24, fontSize + 1) })}
+                        className="w-8 h-8 flex items-center justify-center rounded bg-slate-800 hover:bg-slate-700 text-slate-200"
+                      >+</button>
+                    </div>
+                  </div>
+                  <input
+                    type="range"
+                    min="10"
+                    max="24"
+                    value={fontSize}
+                    onChange={(e) => onUpdateConfig({ fontSize: parseInt(e.target.value) })}
+                    className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                  />
+                  <div className="p-2 bg-slate-900 rounded border border-slate-800 text-center text-slate-300" style={{ fontSize: `${fontSize}px` }}>
+                    پیش‌نمایش متن پیام هویار
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'agent' && (
             <div className="space-y-3">
               <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 space-y-2">
@@ -331,16 +405,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                   <button
                     onClick={onToggleAutoApprove}
-                    className={`relative w-10 h-5 rounded-full transition-all shrink-0 border ${
-                      autoApproveTools
-                        ? 'bg-sky-600 border-sky-500'
-                        : 'bg-slate-800 border-slate-700'
-                    }`}
+                    className={`relative w-10 h-5 rounded-full transition-all shrink-0 border ${autoApproveTools
+                      ? 'bg-sky-600 border-sky-500'
+                      : 'bg-slate-800 border-slate-700'
+                      }`}
                   >
                     <span
-                      className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${
-                        autoApproveTools ? 'left-5' : 'left-0.5'
-                      }`}
+                      className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${autoApproveTools ? 'left-5' : 'left-0.5'
+                        }`}
                     />
                   </button>
                 </div>
@@ -387,11 +459,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onChange={(e) => editingSystemPrompt && setTempSystemPrompt(e.target.value)}
                 readOnly={!editingSystemPrompt}
                 rows={16}
-                className={`w-full bg-slate-950 border rounded-lg p-2.5 text-xs text-slate-300 dir-ltr font-mono leading-relaxed focus:outline-none resize-none transition-all ${
-                  editingSystemPrompt
-                    ? 'border-sky-500/50'
-                    : 'border-slate-800 opacity-80 cursor-default'
-                }`}
+                className={`w-full bg-slate-950 border rounded-lg p-2.5 text-xs text-slate-300 dir-ltr font-mono leading-relaxed focus:outline-none resize-none transition-all ${editingSystemPrompt
+                  ? 'border-sky-500/50'
+                  : 'border-slate-800 opacity-80 cursor-default'
+                  }`}
               />
             </div>
           )}
@@ -399,12 +470,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {activeTab === 'guide' && (
             <div className="space-y-4 text-slate-300 text-xs leading-relaxed dir-rtl">
               <div className="p-3 bg-slate-900 border border-slate-800 rounded-lg">
-                <h3 className="text-sky-400 font-bold mb-2 flex items-center gap-1.5"><HelpCircle className="w-4 h-4"/> راهنمای دریافت کلید API</h3>
+                <h3 className="text-sky-400 font-bold mb-2 flex items-center gap-1.5"><HelpCircle className="w-4 h-4" /> راهنمای دریافت کلید API</h3>
                 <p className="mb-2 text-[11px] text-slate-400">
                   برای استفاده از مدل‌های هوش مصنوعی مختلف، شما نیاز به دریافت کلید ارتباطی (API Key) دارید. مراحل دریافت برای مهمترین سرویس‌ها در زیر توضیح داده شده است:
                 </p>
               </div>
-              
+
               <div className="space-y-3">
                 <div className="p-3 border border-slate-800 rounded bg-slate-950">
                   <div className="font-semibold text-slate-200 mb-1">۱. گوگل جمینای (Google Gemini) - رایگان</div>

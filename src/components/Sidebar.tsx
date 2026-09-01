@@ -1,21 +1,25 @@
 import React, { useState } from 'react';
 import { ChatSession, FileNode, ProviderConfig, ProviderId } from '../types';
-import { 
-  Folder, 
-  FileCode, 
-  FileText, 
-  FileJson, 
-  ChevronRight, 
-  ChevronDown, 
-  RefreshCw, 
-  Terminal, 
-  FolderPlus, 
-  Bug, 
-  ShieldCheck, 
+import {
+  Folder,
+  FileCode,
+  FileText,
+  FileJson,
+  ChevronRight,
+  ChevronDown,
+  RefreshCw,
+  Terminal,
+  FolderPlus,
+  Bug,
+  ShieldCheck,
   Cpu,
   Layers,
   MessageSquare,
-  Plus
+  Plus,
+  Trash2,
+  Edit2,
+  Check,
+  X as CloseIcon
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -30,6 +34,8 @@ interface SidebarProps {
   activeChatId: string;
   onNewChat: () => void;
   onSelectChat: (chatId: string) => void;
+  onDeleteChat: (chatId: string) => void;
+  onEditChatTitle: (chatId: string, newTitle: string) => void;
 }
 
 const FileItem: React.FC<{ node: FileNode; onSelectFile: (path: string) => void }> = ({ node, onSelectFile }) => {
@@ -96,9 +102,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
   chats,
   activeChatId,
   onNewChat,
-  onSelectChat
+  onSelectChat,
+  onDeleteChat,
+  onEditChatTitle
 }) => {
   const [activeTab, setActiveTab] = useState<'files' | 'prompts' | 'chats'>('files');
+  const [editingChatId, setEditingChatId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+
+  const startEditing = (chat: ChatSession) => {
+    setEditingChatId(chat.id);
+    setEditTitle(chat.title);
+  };
+
+  const saveTitle = (chatId: string) => {
+    if (editTitle.trim()) {
+      onEditChatTitle(chatId, editTitle.trim());
+    }
+    setEditingChatId(null);
+  };
 
   const quickPrompts = [
     {
@@ -129,31 +151,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="flex border-b border-slate-800 p-1.5 gap-1 bg-slate-950">
         <button
           onClick={() => setActiveTab('files')}
-          className={`flex-1 py-1 rounded text-xs font-semibold transition-all ${
-            activeTab === 'files'
-              ? 'bg-slate-850 text-sky-400 border border-slate-700/60'
-              : 'text-slate-400 hover:text-slate-200'
-          }`}
+          className={`flex-1 py-1 rounded text-xs font-semibold transition-all ${activeTab === 'files'
+            ? 'bg-slate-850 text-sky-400 border border-slate-700/60'
+            : 'text-slate-400 hover:text-slate-200'
+            }`}
         >
           فایل‌های پروژه
         </button>
         <button
           onClick={() => setActiveTab('prompts')}
-          className={`flex-1 py-1 rounded text-xs font-semibold transition-all ${
-            activeTab === 'prompts'
-              ? 'bg-slate-850 text-sky-400 border border-slate-700/60'
-              : 'text-slate-400 hover:text-slate-200'
-          }`}
+          className={`flex-1 py-1 rounded text-xs font-semibold transition-all ${activeTab === 'prompts'
+            ? 'bg-slate-850 text-sky-400 border border-slate-700/60'
+            : 'text-slate-400 hover:text-slate-200'
+            }`}
         >
           دستورات آماده
         </button>
         <button
           onClick={() => setActiveTab('chats')}
-          className={`flex-1 py-1 rounded text-xs font-semibold transition-all ${
-            activeTab === 'chats'
-              ? 'bg-slate-850 text-sky-400 border border-slate-700/60'
-              : 'text-slate-400 hover:text-slate-200'
-          }`}
+          className={`flex-1 py-1 rounded text-xs font-semibold transition-all ${activeTab === 'chats'
+            ? 'bg-slate-850 text-sky-400 border border-slate-700/60'
+            : 'text-slate-400 hover:text-slate-200'
+            }`}
         >
           گفتگوها
         </button>
@@ -222,21 +241,57 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
           <div className="pt-1 space-y-1">
             {chats.map((chat) => (
-              <button
+              <div
                 key={chat.id}
                 onClick={() => onSelectChat(chat.id)}
-                className={`w-full text-right p-2 rounded-lg border transition-all ${
-                  activeChatId === chat.id
+                className={`group w-full text-right p-2 rounded-lg border transition-all cursor-pointer relative ${activeChatId === chat.id
                     ? 'bg-sky-950/50 border-sky-500/40 text-sky-200'
                     : 'bg-slate-900/70 border-slate-800 text-slate-400 hover:bg-slate-800'
-                }`}
+                  }`}
               >
-                <div className="flex items-center gap-1.5 text-xs font-medium truncate">
-                  <MessageSquare className="w-3.5 h-3.5 shrink-0 text-sky-400" />
-                  <span className="truncate">{chat.title}</span>
-                </div>
-                <div className="text-[10px] mt-1 text-slate-500">{chat.messages.length} پیام</div>
-              </button>
+                {editingChatId === chat.id ? (
+                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      autoFocus
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && saveTitle(chat.id)}
+                      className="flex-1 bg-slate-950 border border-sky-500/50 rounded px-1 py-0.5 text-xs text-slate-200 focus:outline-none"
+                    />
+                    <button onClick={() => saveTitle(chat.id)} className="p-0.5 hover:text-emerald-400">
+                      <Check className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => setEditingChatId(null)} className="p-0.5 hover:text-rose-400">
+                      <CloseIcon className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between gap-1.5 text-xs font-medium">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <MessageSquare className="w-3.5 h-3.5 shrink-0 text-sky-400" />
+                        <span className="truncate">{chat.title}</span>
+                      </div>
+
+                      <div className="hidden group-hover:flex items-center gap-1">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); startEditing(chat); }}
+                          className="p-1 hover:text-sky-400 transition-colors"
+                        >
+                          <Edit2 className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onDeleteChat(chat.id); }}
+                          className="p-1 hover:text-rose-400 transition-colors"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="text-[10px] mt-1 text-slate-500">{chat.messages.length} پیام</div>
+                  </>
+                )}
+              </div>
             ))}
           </div>
         </div>

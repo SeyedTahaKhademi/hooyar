@@ -35,8 +35,7 @@ function createWindow() {
     minHeight: 650,
     title: 'هویار | Hooyar AI Coding Agent',
     icon: path.join(__dirname, '../assets/hooyar.ico'),
-    frame: true,
-    titleBarStyle: 'default',
+    frame: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -170,4 +169,20 @@ ipcMain.handle('config:load', async () => {
 
 ipcMain.handle('config:save', async (_, data) => {
   return saveConfig(data);
+});
+
+ipcMain.on('window:minimize', () => {
+  mainWindow.minimize();
+});
+
+ipcMain.on('window:maximize', () => {
+  if (mainWindow.isMaximized()) {
+    mainWindow.unmaximize();
+  } else {
+    mainWindow.maximize();
+  }
+});
+
+ipcMain.on('window:close', () => {
+  mainWindow.close();
 });

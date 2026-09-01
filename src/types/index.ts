@@ -91,5 +91,6 @@ export interface AppConfig {
   providers: Record<ProviderId, ProviderConfig>;
   chats: ChatSession[];
   activeChatId: string;
-  theme: 'dark' | 'glass';
+  theme: 'dark' | 'light' | 'glass';
+  fontSize: number;
 }
