@@ -6,6 +6,7 @@ const { exec } = require('child_process');
 
 let mainWindow = null;
 let currentWorkspace = null;
+let trustedWorkspacesCache = [];
 
 const configPath = path.join(app.getPath('userData'), 'hooyar_config.json');
 
@@ -16,21 +17,54 @@ const configPath = path.join(app.getPath('userData'), 'hooyar_config.json');
 
 function normalizePath(p) {
   const resolved = path.resolve(String(p));
-  // Windows filesystems are case-insensitive
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+}
+
+function resolveWithinWorkspace(targetPath) {
+  if (typeof targetPath !== 'string' || !targetPath.trim()) return null;
+  if (path.isAbsolute(targetPath)) {
+    return path.resolve(targetPath);
+  }
+  if (!currentWorkspace) return null;
+  return path.resolve(currentWorkspace, targetPath);
+}
+
+function isWorkspaceTrusted(wsPath) {
+  if (!wsPath) return false;
+  const normalized = normalizePath(wsPath);
+  return trustedWorkspacesCache.some((t) => normalizePath(t) === normalized);
+}
+
+function markWorkspaceTrusted(wsPath) {
+  if (!wsPath) return;
+  const normalized = normalizePath(wsPath);
+  if (!trustedWorkspacesCache.some((t) => normalizePath(t) === normalized)) {
+    trustedWorkspacesCache.push(wsPath);
+    const cfg = loadConfigRaw() || {};
+    cfg.trustedWorkspaces = Array.from(new Set([...(cfg.trustedWorkspaces || []), wsPath]));
+    saveConfigRaw(cfg);
+  }
 }
 
 function isPathAllowed(targetPath) {
   if (!currentWorkspace) return false;
-  if (typeof targetPath !== 'string' || !targetPath.trim()) return false;
+  const resolved = resolveWithinWorkspace(targetPath);
+  if (!resolved) return false;
+  if (!isWorkspaceTrusted(currentWorkspace)) return false;
   const root = normalizePath(currentWorkspace);
-  const target = normalizePath(targetPath);
+  const target = normalizePath(resolved);
   if (target === root) return true;
   const rel = path.relative(root, target);
   return !rel.startsWith('..') && !path.isAbsolute(rel);
 }
 
 function deniedResult() {
+  if (!isWorkspaceTrusted(currentWorkspace)) {
+    return {
+      success: false,
+      error: 'پروژه هنوز تایید نشده است. لطفاً در پنجره‌ی باز شده روی «تایید پروژه» کلیک کنید.'
+    };
+  }
   return {
     success: false,
     error: 'دسترسی به این مسیر مجاز نیست. فقط فایل‌ها و پوشه‌های داخل پوشه کاری انتخاب‌شده قابل دسترسی هستند.'
@@ -42,11 +76,46 @@ function deniedResult() {
 /* Windows) when available; falls back to plain JSON otherwise.        */
 /* ------------------------------------------------------------------ */
 
+function loadConfigRaw() {
+  try {
+    if (!fs.existsSync(configPath)) return {};
+    const raw = fs.readFileSync(configPath, 'utf8');
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+function saveConfigRaw(data) {
+  try {
+    fs.writeFileSync(configPath, JSON.stringify(data, null, 2), 'utf8');
+    return true;
+  } catch (err) {
+    console.error('Error saving raw config:', err);
+    return false;
+  }
+}
+
+function extractTrustedWorkspaces(parsed) {
+  if (!parsed) return [];
+  if (Array.isArray(parsed.trustedWorkspaces)) return parsed.trustedWorkspaces;
+  if (parsed.__encrypted && parsed.payload && safeStorage.isEncryptionAvailable()) {
+    try {
+      const decrypted = safeStorage.decryptString(Buffer.from(parsed.payload, 'base64'));
+      const inner = JSON.parse(decrypted);
+      return Array.isArray(inner.trustedWorkspaces) ? inner.trustedWorkspaces : [];
+    } catch {}
+  }
+  return [];
+}
+
 function loadConfig() {
   try {
     if (!fs.existsSync(configPath)) return {};
     const raw = fs.readFileSync(configPath, 'utf8');
     const parsed = JSON.parse(raw);
+
+    trustedWorkspacesCache = extractTrustedWorkspaces(parsed);
 
     if (parsed && parsed.__encrypted && parsed.payload) {
       if (safeStorage.isEncryptionAvailable()) {
@@ -57,7 +126,6 @@ function loadConfig() {
       return {};
     }
 
-    // Legacy plaintext config (migrates to encrypted on next save)
     return parsed;
   } catch (err) {
     console.error('Error loading config:', err);
@@ -67,15 +135,17 @@ function loadConfig() {
 
 function saveConfig(data) {
   try {
+    const dataWithTrust = { ...data, trustedWorkspaces: trustedWorkspacesCache };
     let output;
     if (safeStorage.isEncryptionAvailable()) {
       output = JSON.stringify({
         __encrypted: true,
         v: 1,
-        payload: safeStorage.encryptString(JSON.stringify(data)).toString('base64')
+        payload: safeStorage.encryptString(JSON.stringify(dataWithTrust)).toString('base64'),
+        trustedWorkspaces: trustedWorkspacesCache
       });
     } else {
-      output = JSON.stringify(data, null, 2);
+      output = JSON.stringify(dataWithTrust, null, 2);
     }
     fs.writeFileSync(configPath, output, 'utf8');
     return true;
@@ -105,7 +175,7 @@ function createWindow() {
       sandbox: true,
       spellcheck: false
     },
-    backgroundColor: '#0b0f19'
+    backgroundColor: '#12131a'
   });
 
   // Harden: the renderer must never navigate away or open new windows
@@ -148,9 +218,32 @@ ipcMain.handle('dialog:selectFolder', async () => {
   if (result.canceled || result.filePaths.length === 0) {
     return null;
   }
-  const selected = result.filePaths[0];
-  currentWorkspace = path.resolve(selected);
-  return selected;
+  const selected = path.resolve(result.filePaths[0]);
+  currentWorkspace = selected;
+
+  if (!isWorkspaceTrusted(selected)) {
+    const trust = await dialog.showMessageBox(mainWindow, {
+      type: 'warning',
+      title: 'تایید اعتماد به پروژه — Trust Workspace',
+      message: `آیا به نویسندگان پروژه‌ی زیر اعتماد دارید؟\n\n${selected}`,
+      detail:
+        'اگر این پروژه را تایید کنید، ایجنت هویار می‌تواند فایل‌ها و پوشه‌های داخل آن را ' +
+        'ویرایش، ایجاد و حذف کند و دستورات ترمینال هم در آن اجرا گردد.\n\n' +
+        'فقط در صورتی ادامه دهید که منبع پروژه را می‌شناسید و به آن اعتماد دارید.',
+      buttons: ['تایید نمی‌کنم', 'تایید و ادامه — Trust Project'],
+      cancelId: 0,
+      defaultId: 1,
+      noLink: true
+    });
+
+    if (trust.response !== 1) {
+      currentWorkspace = null;
+      return { path: selected, trusted: false, canceled: true };
+    }
+    markWorkspaceTrusted(selected);
+  }
+
+  return { path: selected, trusted: true, canceled: false };
 });
 
 ipcMain.handle('workspace:set', (_, workspacePath) => {
@@ -159,6 +252,47 @@ ipcMain.handle('workspace:set', (_, workspacePath) => {
       ? path.resolve(workspacePath)
       : null;
   return true;
+});
+
+ipcMain.handle('workspace:trust', (_, workspacePath) => {
+  const ws = typeof workspacePath === 'string' && workspacePath.trim()
+    ? path.resolve(workspacePath)
+    : currentWorkspace;
+  if (ws) {
+    markWorkspaceTrusted(ws);
+    currentWorkspace = ws;
+    return true;
+  }
+  return false;
+});
+
+ipcMain.handle('workspace:isTrusted', (_, workspacePath) => {
+  const ws = typeof workspacePath === 'string' && workspacePath.trim()
+    ? workspacePath
+    : currentWorkspace;
+  return isWorkspaceTrusted(ws);
+});
+
+ipcMain.handle('workspace:showTrustDialog', async () => {
+  if (!currentWorkspace) return false;
+  const trust = await dialog.showMessageBox(mainWindow, {
+    type: 'warning',
+    title: 'تایید اعتماد به پروژه — Trust Workspace',
+    message: `آیا به نویسندگان پروژه‌ی زیر اعتماد دارید؟\n\n${currentWorkspace}`,
+    detail:
+      'اگر این پروژه را تایید کنید، ایجنت هویار می‌تواند فایل‌ها و پوشه‌های داخل آن را ' +
+      'ویرایش، ایجاد و حذف کند و دستورات ترمینال هم در آن اجرا گردد.\n\n' +
+      'فقط در صورتی ادامه دهید که منبع پروژه را می‌شناسید و به آن اعتماد دارید.',
+    buttons: ['تایید نمی‌کنم', 'تایید و ادامه — Trust Project'],
+    cancelId: 0,
+    defaultId: 1,
+    noLink: true
+  });
+  if (trust.response === 1) {
+    markWorkspaceTrusted(currentWorkspace);
+    return true;
+  }
+  return false;
 });
 
 ipcMain.handle('dialog:saveTextFile', async (_, { defaultName, content }) => {
@@ -206,6 +340,7 @@ const MAX_READ_FILE_BYTES = 2 * 1024 * 1024; // 2 MB
 ipcMain.handle('fs:readDir', async (_, dirPath) => {
   try {
     if (!isPathAllowed(dirPath)) return deniedResult();
+    const resolved = resolveWithinWorkspace(dirPath);
 
     function scan(dir, depth = 0) {
       const items = fs.readdirSync(dir, { withFileTypes: true });
@@ -229,7 +364,7 @@ ipcMain.handle('fs:readDir', async (_, dirPath) => {
       );
     }
 
-    return { success: true, tree: scan(dirPath) };
+    return { success: true, tree: scan(resolved) };
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -238,11 +373,12 @@ ipcMain.handle('fs:readDir', async (_, dirPath) => {
 ipcMain.handle('fs:readFile', async (_, filePath) => {
   try {
     if (!isPathAllowed(filePath)) return deniedResult();
-    const stat = fs.statSync(filePath);
+    const resolved = resolveWithinWorkspace(filePath);
+    const stat = fs.statSync(resolved);
     if (stat.size > MAX_READ_FILE_BYTES) {
       return { success: false, error: `حجم فایل بیش از حد مجاز است (${Math.round(stat.size / 1024)} کیلوبایت؛ سقف: ۲ مگابایت).` };
     }
-    const content = fs.readFileSync(filePath, 'utf8');
+    const content = fs.readFileSync(resolved, 'utf8');
     return { success: true, content };
   } catch (error) {
     return { success: false, error: error.message };
@@ -252,12 +388,13 @@ ipcMain.handle('fs:readFile', async (_, filePath) => {
 ipcMain.handle('fs:writeFile', async (_, { filePath, content }) => {
   try {
     if (!isPathAllowed(filePath)) return deniedResult();
-    const dir = path.dirname(filePath);
+    const resolved = resolveWithinWorkspace(filePath);
+    const dir = path.dirname(resolved);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    fs.writeFileSync(filePath, content, 'utf8');
-    return { success: true };
+    fs.writeFileSync(resolved, content, 'utf8');
+    return { success: true, path: resolved };
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -266,15 +403,16 @@ ipcMain.handle('fs:writeFile', async (_, { filePath, content }) => {
 ipcMain.handle('fs:deleteFile', async (_, filePath) => {
   try {
     if (!isPathAllowed(filePath)) return deniedResult();
-    if (normalizePath(filePath) === normalizePath(currentWorkspace)) {
+    const resolved = resolveWithinWorkspace(filePath);
+    if (normalizePath(resolved) === normalizePath(currentWorkspace)) {
       return { success: false, error: 'حذف ریشه پوشه کاری مجاز نیست.' };
     }
-    if (fs.existsSync(filePath)) {
-      const stat = fs.statSync(filePath);
+    if (fs.existsSync(resolved)) {
+      const stat = fs.statSync(resolved);
       if (stat.isDirectory()) {
-        fs.rmSync(filePath, { recursive: true, force: true });
+        fs.rmSync(resolved, { recursive: true, force: true });
       } else {
-        fs.unlinkSync(filePath);
+        fs.unlinkSync(resolved);
       }
     }
     return { success: true };
@@ -387,7 +525,10 @@ ipcMain.handle('fs:search', async (_, { query, targetPath }) => {
     if (!currentWorkspace) {
       return { success: false, error: 'ابتدا پوشه کاری پروژه را انتخاب کنید.' };
     }
-    const root = targetPath && isPathAllowed(targetPath) ? path.resolve(targetPath) : currentWorkspace;
+    if (!isWorkspaceTrusted(currentWorkspace)) {
+      return { success: false, error: 'پروژه هنوز تایید نشده است. لطفاً پروژه را تایید کنید.' };
+    }
+    const root = targetPath && isPathAllowed(targetPath) ? resolveWithinWorkspace(targetPath) : currentWorkspace;
     const q = String(query || '').toLowerCase();
     if (!q.trim()) {
       return { success: false, error: 'عبارت جستجو خالی است.' };
@@ -401,7 +542,7 @@ ipcMain.handle('fs:search', async (_, { query, targetPath }) => {
       try {
         items = fs.readdirSync(dir, { withFileTypes: true });
       } catch {
-        return; // unreadable folder — skip silently
+        return;
       }
 
       for (const item of items) {
@@ -415,13 +556,11 @@ ipcMain.handle('fs:search', async (_, { query, targetPath }) => {
           continue;
         }
 
-        // 1) filename match
         if (item.name.toLowerCase().includes(q)) {
           results.push({ type: 'filename', path: fullPath, snippet: '' });
           continue;
         }
 
-        // 2) content match (text files only)
         const ext = path.extname(item.name).toLowerCase();
         if (!TEXT_EXTENSIONS.has(ext)) continue;
         try {
@@ -439,7 +578,6 @@ ipcMain.handle('fs:search', async (_, { query, targetPath }) => {
             results.push({ type: 'content', path: fullPath, snippet });
           }
         } catch {
-          // binary or unreadable file — skip
         }
       }
     }

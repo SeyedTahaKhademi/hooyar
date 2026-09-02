@@ -4,62 +4,204 @@
 @import "@fontsource/vazirmatn/900.css";
 @import "tailwindcss";
 
+/* ================= Theme Variables ================ */
+
+:root,
+[data-theme="dark"] {
+  --bg-root: #070a12;
+  --bg-surface: #0b0f19;
+  --bg-elevated: #0d1117;
+  --bg-card: rgba(13, 18, 30, 0.92);
+  --bg-card-solid: #0d121e;
+  --bg-inner: #0b1220;
+  --bg-input: #0f172a;
+  --bg-code: #0b1220;
+  --bg-hover: #1e293b;
+  --bg-hover-soft: rgba(30, 41, 59, 0.6);
+
+  --border-base: rgba(148, 163, 184, 0.12);
+  --border-strong: rgba(148, 163, 184, 0.25);
+  --border-divider: rgba(51, 65, 85, 0.9);
+
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --text-accent: #38bdf8;
+
+  --scroll-track: #090d16;
+  --scroll-thumb: #1e293b;
+  --scroll-hover: #0284c7;
+
+  --glass-blur: blur(12px);
+  --sky-tint: rgba(56, 189, 248, 0.08);
+}
+
+[data-theme="light"] {
+  --bg-root: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-elevated: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-solid: #ffffff;
+  --bg-inner: #f1f5f9;
+  --bg-input: #f8fafc;
+  --bg-code: #f1f5f9;
+  --bg-hover: #e2e8f0;
+  --bg-hover-soft: #e2e8f0;
+
+  --border-base: rgba(148, 163, 184, 0.35);
+  --border-strong: rgba(100, 116, 139, 0.5);
+  --border-divider: rgba(203, 213, 225, 0.9);
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --text-accent: #0369a1;
+
+  --scroll-track: #f1f5f9;
+  --scroll-thumb: #cbd5e1;
+  --scroll-hover: #0369a1;
+
+  --glass-blur: blur(10px);
+  --sky-tint: rgba(14, 165, 233, 0.08);
+}
+
+[data-theme="glass"] {
+  --bg-root: #05070c;
+  --bg-surface: rgba(10, 14, 25, 0.65);
+  --bg-elevated: rgba(13, 18, 30, 0.55);
+  --bg-card: rgba(13, 18, 30, 0.5);
+  --bg-card-solid: rgba(15, 23, 42, 0.55);
+  --bg-inner: rgba(2, 6, 23, 0.6);
+  --bg-input: rgba(15, 23, 42, 0.75);
+  --bg-code: rgba(2, 6, 23, 0.75);
+  --bg-hover: rgba(56, 189, 248, 0.12);
+  --bg-hover-soft: rgba(30, 41, 59, 0.45);
+
+  --border-base: rgba(56, 189, 248, 0.14);
+  --border-strong: rgba(56, 189, 248, 0.3);
+  --border-divider: rgba(56, 189, 248, 0.18);
+
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --text-accent: #7dd3fc;
+
+  --scroll-track: rgba(2, 6, 23, 0.6);
+  --scroll-thumb: rgba(56, 189, 248, 0.35);
+  --scroll-hover: rgba(56, 189, 248, 0.7);
+
+  --glass-blur: blur(22px) saturate(1.35);
+  --sky-tint: radial-gradient(circle at top left, rgba(56, 189, 248, 0.12), transparent 50%),
+              radial-gradient(circle at bottom right, rgba(139, 92, 246, 0.10), transparent 50%);
+}
+
+/* ================= Base Styles ================ */
+
 @layer base {
+  html, body, #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+  }
   body {
     font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background-color: #070a12;
-    color: #e2e8f0;
+    background: var(--bg-root);
+    color: var(--text-primary);
     overflow-x: hidden;
     user-select: none;
     direction: rtl;
+    transition: background-color 200ms ease, color 200ms ease;
+  }
+  [data-theme="glass"] body {
+    background-image: var(--sky-tint), var(--bg-root);
+    background-attachment: fixed;
   }
 }
 
-/* Minimal Scrollbar */
+/* ================= Scrollbar ================ */
+
 ::-webkit-scrollbar {
   width: 5px;
   height: 5px;
 }
-
 ::-webkit-scrollbar-track {
-  background: #090d16;
+  background: var(--scroll-track);
 }
-
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: var(--scroll-thumb);
   border-radius: 3px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  background: #0284c7;
+  background: var(--scroll-hover);
 }
 
-/* Minimal Serious Glass Panels */
+/* ================= Themed Utility Classes ================ */
+
+.theme-bg-root { background: var(--bg-root); color: var(--text-primary); }
+.theme-bg-surface { background: var(--bg-surface); }
+.theme-bg-elevated { background: var(--bg-elevated); }
+.theme-bg-card-solid { background: var(--bg-card-solid); }
+.theme-bg-inner { background: var(--bg-inner); }
+.theme-bg-input { background: var(--bg-input); color: var(--text-primary); }
+.theme-bg-code { background: var(--bg-code); }
+
+.theme-border { border-color: var(--border-base); }
+.theme-border-strong { border-color: var(--border-strong); }
+.theme-border-divider { border-color: var(--border-divider); }
+
+.theme-text { color: var(--text-primary); }
+.theme-text-secondary { color: var(--text-secondary); }
+.theme-text-muted { color: var(--text-muted); }
+.theme-text-accent { color: var(--text-accent); }
+
+.theme-hover-bg:hover { background: var(--bg-hover); }
+.theme-hover-bg-soft:hover { background: var(--bg-hover-soft); }
+.theme-hover-text:hover { color: var(--text-primary); }
+.theme-hover-accent:hover { color: var(--text-accent); }
+
+/* ================= Glass Panels ================ */
+
 .glass-panel {
-  background: rgba(13, 18, 30, 0.92);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: var(--bg-card);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border-base);
+  color: var(--text-primary);
 }
 
 .glass-card {
-  background: rgba(22, 30, 46, 0.7);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: var(--bg-card-solid);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border-base);
+  color: var(--text-primary);
 }
 
-/* Serious Blue Accents */
+/* ================= Accent Colors ================ */
+
 .border-accent {
-  border-color: rgba(2, 132, 199, 0.4);
+  border-color: var(--text-accent);
+  opacity: 0.75;
 }
 
 .bg-accent {
-  background-color: #0284c7;
+  background-color: var(--text-accent);
 }
 
 .text-accent {
-  color: #38bdf8;
+  color: var(--text-accent);
 }
 
 .glow-blue {
-  box-shadow: 0 0 15px rgba(2, 132, 199, 0.2);
+  box-shadow: 0 0 15px color-mix(in srgb, var(--text-accent) 22%, transparent);
+}
+
+/* ================= Modal backdrop ================ */
+
+.modal-backdrop {
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(6px);
+}
+[data-theme="light"] .modal-backdrop {
+  background: rgba(15, 23, 42, 0.55);
 }

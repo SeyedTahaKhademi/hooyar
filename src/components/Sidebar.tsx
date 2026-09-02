@@ -196,9 +196,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   return (
-    <aside className="w-60 border-l border-slate-800/90 glass-panel flex flex-col h-[calc(100vh-2.5rem)] select-none">
+    <aside className="w-60 border-l theme-border-divider glass-panel flex flex-col h-[calc(100vh-2.5rem)] select-none">
       {/* Sidebar Header Tabs */}
-      <div className="flex border-b border-slate-800 p-1 gap-0.5 bg-slate-950 flex-wrap">
+      <div className="flex border-b theme-border-divider p-1 gap-0.5 theme-bg-inner flex-wrap">
         {([
           { id: 'files', label: 'فایل‌ها' },
           { id: 'prompts', label: 'دستورات' },
@@ -208,11 +208,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button
             key={t.id}
             onClick={() => setActiveTab(t.id)}
-            className={`flex-1 min-w-[4.5rem] py-1 rounded text-[10.5px] font-semibold transition-all ${
-              activeTab === t.id
-                ? 'bg-slate-850 text-sky-400 border border-slate-700/60'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
+            className={`flex-1 min-w-[4.5rem] py-1 rounded text-[10.5px] font-semibold transition-all ${activeTab === t.id
+              ? 'theme-bg-hover theme-text-accent theme-border'
+              : 'theme-text-muted theme-hover-text'
+              }`}
           >
             {t.label}
           </button>
@@ -276,7 +275,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
           <button
             onClick={onNewChat}
-            className="w-full flex items-center justify-center gap-1.5 p-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold transition-all"
+            className="w-full flex items-center justify-center gap-1.5 p-2 rounded-lg hover:opacity-90 text-white text-xs font-semibold transition-all"
+            style={{ backgroundColor: 'var(--text-accent)' }}
           >
             <Plus className="w-3.5 h-3.5" /> گفتگوی جدید
           </button>
@@ -285,11 +285,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div
                 key={chat.id}
                 onClick={() => onSelectChat(chat.id)}
-                className={`group w-full text-right p-2 rounded-lg border transition-all cursor-pointer relative ${
-                  activeChatId === chat.id
-                    ? 'bg-sky-950/50 border-sky-500/40 text-sky-200'
-                    : 'bg-slate-900/70 border-slate-800 text-slate-400 hover:bg-slate-800'
-                }`}
+                className={`group w-full text-right p-2 rounded-lg border transition-all cursor-pointer relative ${activeChatId === chat.id
+                    ? 'theme-text-accent theme-border'
+                    : 'theme-bg-card-solid theme-border theme-text-muted theme-hover-bg theme-hover-text'
+                  }`}
+                style={activeChatId === chat.id ? {
+                  background: 'color-mix(in srgb, var(--text-accent) 10%, transparent)',
+                  borderColor: 'color-mix(in srgb, var(--text-accent) 30%, transparent)'
+                } : {}}
               >
                 {editingChatId === chat.id ? (
                   <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
@@ -369,11 +372,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               return (
                 <div
                   key={pid}
-                  className={`rounded-lg border transition-all ${
-                    isActive
-                      ? 'bg-sky-950/40 border-sky-600/40'
-                      : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
-                  }`}
+                  className={`rounded-lg border transition-all ${isActive
+                    ? 'bg-sky-950/40 border-sky-600/40'
+                    : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                    }`}
                 >
                   {/* Provider Row */}
                   <div className="flex items-center gap-1 p-1.5">
@@ -408,10 +410,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         background: isActive
                           ? '#10b981'
                           : provider.isVerified
-                          ? '#38bdf8'
-                          : provider.apiKey
-                          ? '#f59e0b'
-                          : '#475569'
+                            ? '#38bdf8'
+                            : provider.apiKey
+                              ? '#f59e0b'
+                              : '#475569'
                       }}
                     />
 
@@ -421,9 +423,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       className="flex-1 text-right min-w-0 flex items-center justify-between gap-1 px-1 py-0.5 rounded hover:bg-slate-800/60 transition-colors"
                     >
                       <div className="text-right min-w-0">
-                        <div className={`text-[11px] font-semibold truncate ${
-                          isActive ? 'text-sky-200' : 'text-slate-200'
-                        }`}>
+                        <div className={`text-[11px] font-semibold truncate ${isActive ? 'text-sky-200' : 'text-slate-200'
+                          }`}>
                           {provider.nameFa}
                         </div>
                         <div className="text-[9.5px] text-slate-500 truncate dir-ltr">
@@ -458,11 +459,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         return (
                           <div
                             key={model.id}
-                            className={`flex items-center gap-1 px-1 py-1 rounded transition-colors group ${
-                              isSelectedModel && isActive
-                                ? 'bg-sky-900/40'
-                                : 'hover:bg-slate-800/60'
-                            }`}
+                            className={`flex items-center gap-1 px-1 py-1 rounded transition-colors group ${isSelectedModel && isActive
+                              ? 'bg-sky-900/40'
+                              : 'hover:bg-slate-800/60'
+                              }`}
                           >
                             {/* Model Reorder */}
                             <div className="flex flex-col gap-0.5 shrink-0 opacity-60 group-hover:opacity-100">
@@ -487,11 +487,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             {/* Select Radio */}
                             <button
                               onClick={() => onChangeModel(pid, model.id)}
-                              className={`w-2 h-2 rounded-full shrink-0 border transition-all ${
-                                isSelectedModel && isActive
-                                  ? 'bg-emerald-400 border-emerald-400'
-                                  : 'border-slate-500 hover:border-sky-400'
-                              }`}
+                              className={`w-2 h-2 rounded-full shrink-0 border transition-all ${isSelectedModel && isActive
+                                ? 'bg-emerald-400 border-emerald-400'
+                                : 'border-slate-500 hover:border-sky-400'
+                                }`}
                               title="انتخاب مدل"
                             />
 
@@ -500,9 +499,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               onClick={() => onChangeModel(pid, model.id)}
                               className="flex-1 text-right min-w-0"
                             >
-                              <div className={`text-[10.5px] font-medium truncate dir-ltr ${
-                                isSelectedModel && isActive ? 'text-emerald-300' : 'text-slate-300'
-                              }`}>
+                              <div className={`text-[10.5px] font-medium truncate dir-ltr ${isSelectedModel && isActive ? 'text-emerald-300' : 'text-slate-300'
+                                }`}>
                                 {model.name}
                               </div>
                               <div className="flex items-center justify-between gap-1 mt-0.5">
@@ -529,24 +527,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       {/* Active Provider Footer Badge */}
-      <div className="p-2 border-t border-slate-800 bg-slate-950 flex items-center justify-between text-xs">
+      <div className="p-2 border-t theme-border-divider theme-bg-inner flex items-center justify-between text-xs">
         <div className="flex items-center gap-2 min-w-0">
           <div className="relative shrink-0">
-            <Cpu className="w-3.5 h-3.5 text-sky-400" />
-            <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400 border border-slate-950"></div>
+            <Cpu className="w-3.5 h-3.5 theme-text-accent" />
+            <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400 border theme-bg-inner" style={{ borderColor: 'var(--bg-inner)' }}></div>
           </div>
           <div className="min-w-0">
-            <div className="text-[10.5px] font-semibold text-slate-200 truncate">
+            <div className="text-[10.5px] font-semibold theme-text truncate">
               {providers[activeProviderId]?.nameFa}
             </div>
-            <div className="text-[9.5px] text-slate-500 truncate dir-ltr">
+            <div className="text-[9.5px] theme-text-muted truncate dir-ltr">
               {providers[activeProviderId]?.models.find(
                 (m) => m.id === providers[activeProviderId]?.selectedModel
               )?.name || '—'}
             </div>
           </div>
         </div>
-        <span className="text-[9px] text-emerald-400 font-semibold px-1.5 py-0.5 rounded bg-emerald-950/60 border border-emerald-800/40 shrink-0">
+        <span className="text-[9px] text-emerald-400 font-semibold px-1.5 py-0.5 rounded shrink-0" style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)' }}>
           فعال
         </span>
       </div>

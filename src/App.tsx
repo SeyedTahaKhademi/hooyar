@@ -65,20 +65,24 @@ function App() {
               if (Array.isArray(saved.modelOrder[k])) mergedModelOrder[k] = saved.modelOrder[k];
             }
           }
-          setConfig((prev) => ({
-            ...prev,
+          const finalConfig = {
+            ...defaultConfig,
             ...saved,
             providers: {
               ...DEFAULT_PROVIDERS,
               ...(saved.providers || {})
             },
-            chats: Array.isArray(saved.chats) && saved.chats.length ? saved.chats : prev.chats,
-            activeChatId: saved.activeChatId || prev.activeChatId,
+            chats: Array.isArray(saved.chats) && saved.chats.length ? saved.chats : defaultConfig.chats,
+            activeChatId: saved.activeChatId || defaultConfig.activeChatId,
             providerOrder: Array.isArray(saved.providerOrder) && saved.providerOrder.length
               ? saved.providerOrder
               : DEFAULT_PROVIDER_ORDER,
             modelOrder: mergedModelOrder
-          }));
+          };
+          setConfig(finalConfig);
+          if (finalConfig.workspacePath && native?.setWorkspace) {
+            await native.setWorkspace(finalConfig.workspacePath);
+          }
         }
       }
     };
@@ -90,6 +94,16 @@ function App() {
       native.saveConfig(config);
     }
   }, [config]);
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', config.theme || 'dark');
+      const win = document.querySelector('#app-root') || document.body;
+      if (win) {
+        win.setAttribute('data-theme', config.theme || 'dark');
+      }
+    }
+  }, [config.theme]);
 
   const refreshFileTree = useCallback(async (path: string) => {
     if (!native?.readDir) return;
@@ -104,11 +118,25 @@ function App() {
       alert('این قابلیت در محیط نرم‌افزار دسکتاپ ویندوز هویار فعال است.');
       return;
     }
-    const selected = await native.selectFolder();
-    if (selected) {
-      setConfig((prev) => ({ ...prev, workspacePath: selected }));
-      await refreshFileTree(selected);
-      addTerminalLine('info', `پوشه کاری پروژه: ${selected}`);
+    const result = await native.selectFolder();
+    if (!result) return;
+    const selectedPath = typeof result === 'string' ? result : result.path;
+
+    if (result && typeof result === 'object' && result.canceled) {
+      setConfig((prev) => ({ ...prev, workspacePath: null }));
+      if (native?.setWorkspace) await native.setWorkspace(null);
+      return;
+    }
+
+    if (selectedPath) {
+      if (native?.setWorkspace) await native.setWorkspace(selectedPath);
+      setConfig((prev) => ({ ...prev, workspacePath: selectedPath }));
+      await refreshFileTree(selectedPath);
+      addTerminalLine('info', `پوشه کاری پروژه: ${selectedPath}`);
+      const trusted = result && typeof result === 'object' ? result.trusted : true;
+      if (!trusted) {
+        addTerminalLine('info', 'پروژه تایید نشده. برای فعال‌سازی کامل دسترسی‌ها پروژه را Trust کنید.');
+      }
     }
   };
 
@@ -196,10 +224,10 @@ function App() {
       const out =
         updatedToolCall.status === 'completed'
           ? (updatedToolCall.result !== undefined
-              ? (typeof updatedToolCall.result === 'string'
-                  ? updatedToolCall.result
-                  : JSON.stringify(updatedToolCall.result, null, 2))
-              : 'انجام شد (بدون خروجی).')
+            ? (typeof updatedToolCall.result === 'string'
+              ? updatedToolCall.result
+              : JSON.stringify(updatedToolCall.result, null, 2))
+            : 'انجام شد (بدون خروجی).')
           : `خطا: ${updatedToolCall.error || 'نامشخص'}`;
 
       const feedbackContent =
@@ -292,8 +320,8 @@ function App() {
         const out =
           executed.status === 'completed'
             ? (executed.result !== undefined
-                ? (typeof executed.result === 'string' ? executed.result : JSON.stringify(executed.result, null, 2))
-                : 'انجام شد (بدون خروجی).')
+              ? (typeof executed.result === 'string' ? executed.result : JSON.stringify(executed.result, null, 2))
+              : 'انجام شد (بدون خروجی).')
             : `خطا: ${executed.error || 'نامشخص'}`;
         toolResults.push(`نتیجه ابزار (${tc.tool}#${tc.id}):\n${out}`);
       }
@@ -492,7 +520,7 @@ function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-[#070a12] text-slate-100 overflow-hidden">
+    <div className="flex flex-col h-screen theme-bg-root theme-text overflow-hidden">
       {/* Header */}
       <Header
         workspacePath={config.workspacePath}

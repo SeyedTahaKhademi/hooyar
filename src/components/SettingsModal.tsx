@@ -242,34 +242,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(6px)' }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop"
     >
-      <div className="w-full max-w-xl max-h-[85vh] glass-panel rounded-xl border border-slate-800 shadow-2xl flex flex-col">
+      <div className="w-full max-w-xl max-h-[85vh] glass-panel rounded-xl theme-border shadow-2xl flex flex-col">
         {/* Modal Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-800">
+        <div className="flex items-center justify-between p-4 border-b theme-border-divider">
           <div>
-            <h2 className="text-sm font-bold text-slate-100">تنظیمات سرویس‌ها و ایجنت</h2>
-            <p className="text-[11px] text-slate-400 mt-0.5">مدیریت کلیدهای API و مدل‌های هوش مصنوعی</p>
+            <h2 className="text-sm font-bold theme-text">تنظیمات سرویس‌ها و ایجنت</h2>
+            <p className="text-[11px] theme-text-secondary mt-0.5">مدیریت کلیدهای API و مدل‌های هوش مصنوعی</p>
           </div>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-slate-200 transition-colors"
+            className="p-1 theme-hover-bg rounded theme-text-muted theme-hover-text transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex gap-1 p-2 border-b border-slate-800 bg-slate-950 overflow-x-auto shrink-0">
+        <div className="flex gap-1 p-2 border-b theme-border-divider theme-bg-inner overflow-x-auto shrink-0">
           {(['providers', 'appearance', 'agent', 'system', 'guide'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-semibold transition-all ${activeTab === tab
-                ? 'bg-sky-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                ? 'text-white shadow-sm'
+                : 'theme-text-muted theme-hover-text theme-hover-bg'
                 }`}
+              style={activeTab === tab ? { backgroundColor: 'var(--text-accent)' } : {}}
             >
               {tab === 'providers' && (
                 <>
@@ -347,8 +347,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       key={t.id}
                       onClick={() => onUpdateConfig({ theme: t.id as any })}
                       className={`flex flex-col items-center gap-2 p-3 rounded-lg border transition-all ${theme === t.id
-                          ? 'bg-sky-600 border-sky-400 text-white shadow-lg shadow-sky-900/20'
-                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                        ? 'bg-sky-600 border-sky-400 text-white shadow-lg shadow-sky-900/20'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
                         }`}
                     >
                       <t.icon className="w-5 h-5" />
@@ -530,10 +530,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="p-3 border-t border-slate-800 bg-slate-950 flex justify-end">
+        <div className="p-3 border-t theme-border-divider theme-bg-inner flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow-sm transition-all"
+            className="px-4 py-1.5 rounded-lg hover:opacity-90 text-white text-xs font-semibold shadow-sm transition-all"
+            style={{ backgroundColor: 'var(--text-accent)' }}
           >
             ذخیره و بستن
           </button>
